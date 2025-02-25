@@ -31,7 +31,7 @@ Advanced Tab Manager is a Python-based desktop application built with PyQt6 and 
 
 1. Clone or download this repository:
    ```bash
-   git clone https://github.com/VoxDroid/Advance-Tab-Manager.git
+   git clone https://github.com/VoxDroid/Advanced-Tab-Manager.git
    cd Advanced-Tab-Manager
    ```
 2. Install dependencies using `requirements.txt`:
