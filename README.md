@@ -46,6 +46,7 @@ Advanced Tab Manager is a Python-based desktop application built with PyQt6 and 
 ### Requirements.txt
 ```
 PyQt6
+qtawesome
 selenium
 webdriver-manager
 ```
