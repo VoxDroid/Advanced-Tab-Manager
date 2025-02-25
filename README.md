@@ -57,7 +57,7 @@
 
 3. **Run the Application**:
    ```bash
-   python main.py
+   python app.py
    ```
    - This launches the GUI and automatically installs the ChromeDriver via `webdriver-manager`.
 
