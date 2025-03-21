@@ -16,17 +16,16 @@ from selenium.common.exceptions import WebDriverException
 from webdriver_manager.chrome import ChromeDriverManager
 from selenium.webdriver.chrome.service import Service
 from selenium.webdriver.chrome.options import Options
-import qtawesome as qta  # For FontAwesome icons
+import qtawesome as qta
 import urllib3
 from urllib3.util.retry import Retry
 import socket
 import requests
 import random
+import os
 
-# Disable urllib3 warnings globally to prevent log spam
 urllib3.disable_warnings(urllib3.exceptions.ConnectionError)
 
-# Create a custom urllib3 PoolManager with no retries
 retry_strategy = Retry(total=0, connect=None, read=None, redirect=None, status=None)
 http = urllib3.PoolManager(retries=retry_strategy)
 
@@ -45,14 +44,13 @@ class BrowserThread(QThread):
         self.chrome_options = chrome_options
         self.is_running = True
         self.driver = None
-        # Use a random available port to avoid conflicts (range 9515-9599)
         self.port = random.randint(9515, 9599)
         self.service = Service(ChromeDriverManager().install(), port=self.port)
         self.driver_process = None
         self.chrome_processes = []
-        self.instance_id = instance_id  # Track instance ID for logging and port assignment
-        self.progress = 0  # Track progress for this instance
-        self.cycle = 0  # Track cycles for this instance
+        self.instance_id = instance_id  
+        self.progress = 0  
+        self.cycle = 0  
 
     def wait_for_service(self, host='127.0.0.1', port=0, timeout=10):
         """Wait for ChromeDriver service to be available on the specified port."""
@@ -85,20 +83,17 @@ class BrowserThread(QThread):
     def run(self):
         try:
             self.log_message.emit(f"Starting browser thread for instance {self.instance_id} on port {self.port}", "INFO")
-            # Ensure a unique port is used
+            
             if self.is_port_in_use(self.port):
                 self.port = self.find_available_port()
                 self.service.port = self.port
                 self.log_message.emit(f"Port {self.port} was in use, switching to new port {self.port}", "WARNING")
 
-            # Start the ChromeDriver service with the unique port
             self.service.start()
 
-            # Wait for the service to be available
             if not self.wait_for_service(port=self.service.port):
                 raise WebDriverException(f"ChromeDriver service failed to start on port {self.service.port} for instance {self.instance_id}")
 
-            # Attempt to create the WebDriver with error handling
             try:
                 driver = webdriver.Remote(
                     command_executor=f"http://127.0.0.1:{self.service.port}",
@@ -110,9 +105,8 @@ class BrowserThread(QThread):
                 self.log_message.emit(f"Failed to initialize WebDriver for instance {self.instance_id}: {str(e)}", "ERROR")
                 return
 
-            self.driver_process = psutil.Process(self.service.process.pid)  # Use service.process.pid
+            self.driver_process = psutil.Process(self.service.process.pid)  
 
-            # Track Chrome browser processes spawned by the driver
             self.chrome_processes = [p for p in psutil.process_iter(['pid', 'name']) 
                                   if 'chrome.exe' in p.name().lower() and 
                                   p.create_time() > time.time() - 10]
@@ -130,12 +124,10 @@ class BrowserThread(QThread):
                         break
 
                     try:
-                        # Use a small delay to prevent overwhelming system resources
-                        time.sleep(0.05)  # Throttle to reduce CPU load and prevent freezing
+                        time.sleep(0.05)  
                         self.driver.execute_script(f"window.open('{self.url}', '_blank');")
                         time.sleep(self.interval)
                         
-                        # Ensure driver is still valid before accessing window_handles
                         if not self.driver or not hasattr(self.driver, 'window_handles'):
                             self.error_occurred.emit(f"WebDriver became invalid during tab operation for instance {self.instance_id}")
                             self.log_message.emit(f"WebDriver became invalid during tab operation for instance {self.instance_id}", "ERROR")
@@ -184,13 +176,10 @@ class BrowserThread(QThread):
     def cleanup(self):
         if self.driver:
             try:
-                # Check if driver is still valid before attempting to quit
                 if hasattr(self.driver, 'session_id') and self.driver.session_id:
-                    # Immediately invalidate the session to prevent further requests
-                    self.driver.session_id = None  # Invalidate the session
-                    # Close and quit the driver gracefully
-                    self.driver.close()  # Close the current window
-                    self.driver.quit()   # Quit the driver
+                    self.driver.session_id = None 
+                    self.driver.close()  
+                    self.driver.quit() 
                 else:
                     self.log_message.emit(f"Driver session is invalid for instance {self.instance_id}, skipping graceful quit", "WARNING")
             except Exception as e:
@@ -198,14 +187,12 @@ class BrowserThread(QThread):
             finally:
                 self.driver = None
 
-        # Terminate ChromeDriver service if it exists
         if self.service:
             try:
                 self.service.stop()
             except Exception as e:
                 self.log_message.emit(f"Failed to stop service for instance {self.instance_id}: {str(e)}", "WARNING")
 
-        # Terminate ChromeDriver and Chrome processes asynchronously to prevent UI freeze
         if self.driver_process or self.chrome_processes:
             self.terminate_processes_async()
 
@@ -215,7 +202,7 @@ class BrowserThread(QThread):
             try:
                 if proc and proc.is_running():
                     proc.terminate()
-                    proc.wait(timeout=3)  # Reduced timeout for faster termination
+                    proc.wait(timeout=3)  
             except (psutil.TimeoutExpired, psutil.NoSuchProcess):
                 try:
                     if proc and proc.is_running():
@@ -223,13 +210,11 @@ class BrowserThread(QThread):
                 except psutil.NoSuchProcess:
                     self.log_message.emit(f"Process {proc.pid if proc else 'unknown'} for instance {self.instance_id} already terminated", "INFO")
 
-        # Terminate ChromeDriver process
         if self.driver_process:
             QTimer.singleShot(0, lambda: terminate_process(self.driver_process))
             self.driver_process = None
 
-        # Terminate Chrome browser processes
-        for proc in self.chrome_processes[:]:  # Use a copy to avoid iteration issues
+        for proc in self.chrome_processes[:]: 
             QTimer.singleShot(0, lambda p=proc: terminate_process(p))
 
         self.log_message.emit(f"Browser thread processes for instance {self.instance_id} scheduled for termination", "INFO")
@@ -257,14 +242,22 @@ class LogViewer(QTextEdit):
         self.append(f'<span style="color: {colors.get(level, "#e6f1ff")}">[{timestamp}] [{level}] {message}</span>')
         self.verticalScrollBar().setValue(self.verticalScrollBar().maximum())
 
+def resource_path(relative_path):
+    if hasattr(sys, '_MEIPASS'):
+        return os.path.join(sys._MEIPASS, relative_path)
+    else:
+        return os.path.join(os.path.dirname(__file__), relative_path)
+
 class MainWindow(QMainWindow):
     def __init__(self):
         super().__init__()
+        
+        self.setWindowIcon(QIcon(resource_path("ATM.ico")))
         self.setWindowTitle("Advanced Tab Manager Pro")
         self.setGeometry(100, 100, 1100, 900)
-        self.setMinimumSize(QSize(1100, 900))  # Set minimum size to prevent resizing by default
+        self.setMinimumSize(QSize(1100, 900))
         self.setStyleSheet(self.get_dark_navy_style())
-        self.lock_window_size = True  # Default to locked window size
+        self.lock_window_size = True
 
         self.central_widget = QWidget()
         self.setCentralWidget(self.central_widget)
@@ -284,16 +277,13 @@ class MainWindow(QMainWindow):
         self.threads = []
         self.load_settings()
 
-        # Setup logging
         logging.basicConfig(level=logging.INFO)
         self.logger = logging.getLogger("TabManager")
 
-        # Error handling timer
         self.error_timer = QTimer()
         self.error_timer.timeout.connect(self.check_errors)
-        self.error_timer.start(1000)  # Check every second
+        self.error_timer.start(1000)
 
-        # Update window size lock based on settings
         self.update_window_size_lock()
 
     def get_dark_navy_style(self):
@@ -1345,7 +1335,7 @@ class MainWindow(QMainWindow):
         # Start real-time monitoring
         self.system_monitor_timer = QTimer()
         self.system_monitor_timer.timeout.connect(self.update_system_monitor)
-        self.system_monitor_timer.start(1000)  # Update every second
+        self.system_monitor_timer.start(1000) 
 
     def create_logs_tab(self):
         logs_tab = QWidget()
@@ -1448,7 +1438,7 @@ class MainWindow(QMainWindow):
         <p>Description: Advanced Tab Manager is a Python-based desktop application built with PyQt6 and Selenium. It provides a user-friendly interface to automate browser tab management, allowing users to open and close Chrome tabs programmatically with extensive customization options. This tool is ideal for testing, simulation, or repetitive browser automation tasks.</p>
         """
         about_label = QLabel(about_info)
-        about_label.setObjectName("about_label")  # Add object name for dynamic updates
+        about_label.setObjectName("about_label")
         about_label.setOpenExternalLinks(True)
         about_label.setWordWrap(True)
         about_label.setToolTip("Click links for more information about the developer or license")
@@ -1465,7 +1455,7 @@ class MainWindow(QMainWindow):
         <p>This software is licensed under the MIT License. See <a href="https://github.com/VoxDroid/Advance-Tab-Manager?tab=MIT-1-ov-file">MIT License</a> for details.</p>
         """
         license_label = QLabel(license_text)
-        license_label.setObjectName("license_label")  # Add object name for dynamic updates
+        license_label.setObjectName("license_label")
         license_label.setOpenExternalLinks(True)
         license_label.setWordWrap(True)
         license_label.setToolTip("Click to view the MIT License details online")
@@ -1524,7 +1514,6 @@ class MainWindow(QMainWindow):
             if arg.strip():
                 chrome_options.add_argument(arg.strip())
 
-        # Start all instances simultaneously with a slight delay to prevent resource contention
         for instance_id in range(instances):
             thread = BrowserThread(url, iterations, interval, chrome_options, instance_id)
             thread.update_status.connect(self.update_status)
@@ -1534,15 +1523,14 @@ class MainWindow(QMainWindow):
             thread.error_occurred.connect(self.handle_error)
             thread.start()
             self.threads.append(thread)
-            time.sleep(0.1)  # Small delay between starting instances to reduce resource contention
+            time.sleep(0.1) 
         self.status_message.setText("Running...")
 
     def stop_browser(self):
-        for thread in self.threads[:]:  # Create a copy to modify list safely
+        for thread in self.threads[:]:
             thread.stop()
-            # Wait for the thread to finish asynchronously to prevent UI freeze
             if thread.isRunning():
-                QTimer.singleShot(0, lambda t=thread: t.wait(5000))  # Increased timeout to 5 seconds
+                QTimer.singleShot(0, lambda t=thread: t.wait(5000)) 
         self.threads.clear()
         self.kill_remaining_processes()
         self.status_message.setText("Stopped")
@@ -1550,12 +1538,11 @@ class MainWindow(QMainWindow):
         self.log_message("All browser threads and processes stopped", "INFO")
 
     def kill_remaining_processes(self):
-        # Kill any remaining ChromeDriver or Chrome processes immediately, asynchronously
         def terminate_process(proc):
             try:
                 if proc and proc.is_running():
                     proc.terminate()
-                    proc.wait(timeout=3)  # Reduced timeout for faster termination
+                    proc.wait(timeout=3)
             except (psutil.TimeoutExpired, psutil.NoSuchProcess):
                 try:
                     if proc and proc.is_running():
@@ -1583,7 +1570,6 @@ class MainWindow(QMainWindow):
         self.status_message.setText(status)
 
     def update_progress(self, value):
-        # Average progress across all running instances
         if self.threads:
             total_progress = sum(thread.progress for thread in self.threads if hasattr(thread, 'progress')) // len(self.threads)
             self.progress_bar.setValue(total_progress if total_progress > 0 else value)
@@ -1591,7 +1577,6 @@ class MainWindow(QMainWindow):
             self.progress_bar.setValue(value)
 
     def update_cycle(self, cycle):
-        # Update cycle count to reflect the maximum across all instances
         max_cycle = max((thread.cycle for thread in self.threads if hasattr(thread, 'cycle')), default=cycle)
         self.cycle_label.setText(str(max_cycle))
 
@@ -1605,7 +1590,7 @@ class MainWindow(QMainWindow):
         self.stop_browser()
 
     def check_errors(self):
-        for thread in self.threads[:]:  # Create a copy to safely modify list
+        for thread in self.threads[:]: 
             if not thread.isRunning() and thread.is_running:
                 self.handle_error(f"Browser thread for instance {thread.instance_id} terminated unexpectedly")
                 self.stop_browser()
@@ -2271,7 +2256,6 @@ class MainWindow(QMainWindow):
         self.update_ui_text(lang)
 
     def update_ui_text(self, translations):
-        # Update window title (app name)
         self.setWindowTitle(translations["app_name"])
 
         # Main Tab
@@ -2290,7 +2274,7 @@ class MainWindow(QMainWindow):
         self.reset_button.setText(translations["main_reset"])
         self.reset_button.setToolTip(translations["main_reset_tooltip"])
         self.status_text_label.setText(translations["main_status"])
-        self.status_label.setText(translations["status_idle"])  # Default "Idle" state
+        self.status_label.setText(translations["status_idle"])  
         self.status_label.setToolTip(translations["main_status_tooltip"])
         self.cycle_text_label.setText(translations["main_cycles"])
         self.cycle_label.setToolTip(translations["main_cycles_tooltip"])
@@ -2470,13 +2454,12 @@ class MainWindow(QMainWindow):
         for thread in self.threads:
             if thread.isRunning():
                 thread.terminate()
-                QTimer.singleShot(0, lambda t=thread: t.wait(5000))  # Asynchronous wait to prevent UI freeze
+                QTimer.singleShot(0, lambda t=thread: t.wait(5000))
         self.kill_remaining_processes()
         event.accept()
 
     def resizeEvent(self, event):
         if self.lock_window_size:
-            # Reset the window size to the minimum size if resizing is attempted
             self.resize(self.minimumSize())
         super().resizeEvent(event)
 
@@ -2487,11 +2470,11 @@ class MainWindow(QMainWindow):
 
     def update_window_size_lock(self):
         if self.lock_window_size:
-            self.setMinimumSize(QSize(1100, 900))  # Lock to the default size
-            self.setMaximumSize(QSize(1100, 900))  # Prevent resizing beyond this
+            self.setMinimumSize(QSize(1100, 900))  
+            self.setMaximumSize(QSize(1100, 900)) 
         else:
-            self.setMinimumSize(QSize(0, 0))  # Allow resizing
-            self.setMaximumSize(QSize(16777215, 16777215))  # Default maximum size (effectively unlimited)
+            self.setMinimumSize(QSize(0, 0))
+            self.setMaximumSize(QSize(16777215, 16777215))  
 
 if __name__ == "__main__":
     app = QApplication(sys.argv)
