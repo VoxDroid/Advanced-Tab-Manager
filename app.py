@@ -1431,7 +1431,7 @@ class MainWindow(QMainWindow):
 
         about_info = """
         <h2>Advanced Tab Manager Pro</h2>
-        <p>Version: 1.1.0</p>
+        <p>Version: 1.2.0</p>
         <p>Developed by: VoxDroid</p>
         <p>Github: <a href="https://github.com/VoxDroid">https://github.com/VoxDroid</a></p>
         <p>Support: <a href="https://github.com/VoxDroid/Advance-Tab-Manager/issues">Issues Page</a></p>
@@ -1474,7 +1474,7 @@ class MainWindow(QMainWindow):
         self.status_message = QLabel("Ready")
         self.status_message.setStyleSheet("color: #e6f1ff; font-size: 14px;")
         status_bar.addWidget(self.status_message)
-        dev_info = QLabel("Developed by: VoxDroid | GitHub: github.com/VoxDroid | Version: 1.1.0")
+        dev_info = QLabel("Developed by: VoxDroid | GitHub: github.com/VoxDroid | Version: 1.2.0")
         dev_info.setStyleSheet("color: #e6f1ff; font-size: 14px;")
         status_bar.addPermanentWidget(dev_info)
 
@@ -2377,7 +2377,7 @@ class MainWindow(QMainWindow):
         # Update "About" tab content dynamically
         about_info = f"""
         <h2><a href="https://github.com/VoxDroid/Advance-Tab-Manager">{translations["app_name"]}</a></h2>
-        <p>{translations["version"]} 1.1.0</p>
+        <p>{translations["version"]} 1.2.0</p>
         <p>{translations["developed_by"]} VoxDroid</p>
         <p>{translations["github"]}<a href="https://github.com/VoxDroid">https://github.com/VoxDroid</a></p>
         <p>Support: <a href="https://github.com/VoxDroid/Advance-Tab-Manager/issues">Issues Page</a></p>
