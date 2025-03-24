@@ -2,3 +2,4 @@ PyQt6
 qtawesome
 selenium
 webdriver-manager
+psutil
