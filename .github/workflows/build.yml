@@ -1,0 +1,1345 @@
+# Builder Workflow File
+
+name: Build Advanced Tab Manager
+
+on:
+  push:
+    branches: [ main ]
+
+env:
+  name: 'AdvancedTabManager' 
+  dist: 'advancedtabmanager'
+  src: 'advancedtabmanager' 
+  secret: 'ATM'
+
+jobs:
+  check-for-building:
+    runs-on: ubuntu-latest
+    outputs:
+      match: ${{ steps.check_commit.outputs.match }}
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.9'
+          architecture: 'x64'
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install toml
+
+      - name: Extract version from pyproject.toml
+        id: extract_version
+        shell: bash
+        run: |
+          if [ ! -f "pyproject.toml" ]; then
+            echo "pyproject.toml not found!"
+            exit 1
+          fi
+          echo "Contents of pyproject.toml:"
+          cat pyproject.toml
+          VERSION=$(python -c "import toml; print(toml.load('pyproject.toml')['tool']['briefcase']['version'])")
+          if [ -z "$VERSION" ]; then
+            echo "Failed to extract version from pyproject.toml!"
+            exit 1
+          fi
+          echo "version=$VERSION" >> $GITHUB_OUTPUT
+          echo "Extracted version: $VERSION"
+
+      - name: Check if commit title matches version
+        id: check_commit
+        shell: bash
+        run: |
+          COMMIT_TITLE=$(git log -1 --pretty=%s)  # Extracts only the commit title (first line)
+          VERSION="v${{ steps.extract_version.outputs.version }}"
+          if [ "$COMMIT_TITLE" = "$VERSION" ]; then
+            echo "match=true" >> $GITHUB_OUTPUT
+            echo "Commit title matches the version. Proceeding with builds."
+          else
+            echo "match=false" >> $GITHUB_OUTPUT
+            echo "Commit title does not match the version. Skipping builds."
+          fi
+          echo "Commit title: $COMMIT_TITLE"
+          echo "Expected version: $VERSION"
+          echo "Match: ${{ steps.check_commit.outputs.match }}"
+
+  build-windows:
+    needs: check-for-building
+    if: needs.check-for-building.outputs.match == 'true'
+    runs-on: windows-latest
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.9' 
+          architecture: 'x64'
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install briefcase toml PyQt6
+
+      - name: Check Briefcase version
+        run: |
+          briefcase --version
+
+      - name: Debug - Log commit message
+        run: |
+          echo "Commit message: ${{ github.event.head_commit.message }}"
+
+      - name: Extract version from pyproject.toml
+        id: extract_version
+        shell: bash
+        run: |
+          if [ ! -f "pyproject.toml" ]; then
+            echo "pyproject.toml not found!"
+            exit 1
+          fi
+          echo "Contents of pyproject.toml:"
+          cat pyproject.toml
+          VERSION=$(python -c "import toml; print(toml.load('pyproject.toml')['tool']['briefcase']['version'])")
+          if [ -z "$VERSION" ]; then
+            echo "Failed to extract version from pyproject.toml!"
+            exit 1
+          fi
+          echo "version=$VERSION" >> $GITHUB_OUTPUT
+          echo "Extracted version: $VERSION"
+
+      - name: Create commit match indicator file
+        shell: bash
+        run: |
+          echo "true" > commit-match.txt
+
+      - name: Upload commit match indicator
+        uses: actions/upload-artifact@v4
+        with:
+          name: commit-match-indicator-windows
+          path: commit-match.txt
+
+      - name: Build with Briefcase
+        shell: bash
+        run: |
+          briefcase create
+          briefcase build
+          briefcase package
+        env:
+          BRIEFCASE_PLATFORM: windows
+
+      - name: Normalize directory case
+        shell: bash
+        run: |
+          if [ -d "Dist" ]; then
+            mv Dist dist
+          fi
+
+      - name: Rename MSI file
+        id: rename_msi
+        shell: bash
+        run: |
+          cp dist/${{ env.dist }}-${{ steps.extract_version.outputs.version }}.msi dist/W-${{ env.name }}-${{ steps.extract_version.outputs.version }}-x86_64.msi
+          rm dist/${{ env.dist }}-${{ steps.extract_version.outputs.version }}.msi
+
+      - name: Debug - List output files
+        shell: bash
+        run: |
+          echo "Listing directories to check case:"
+          ls -ld dist Dist 2>/dev/null || true
+          echo "Listing output files:"
+          find . -type f | grep -E '\.(msi)$'
+
+      - name: Upload artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ env.name }}-windows-latest
+          path: dist/W-${{ env.name }}-${{ steps.extract_version.outputs.version }}-x86_64.msi
+          include-hidden-files: true
+
+  build-macos-arm64:
+    needs: check-for-building
+    if: needs.check-for-building.outputs.match == 'true'
+    runs-on: macos-latest
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Install gettext
+        run: |
+          brew unlink gettext || true
+          brew install gettext
+          brew link gettext --force
+          export DYLD_LIBRARY_PATH="/opt/homebrew/opt/gettext/lib:$DYLD_LIBRARY_PATH"
+          echo "DYLD_LIBRARY_PATH=$DYLD_LIBRARY_PATH" >> $GITHUB_ENV
+          if [ -f "/opt/homebrew/opt/gettext/lib/libintl.8.dylib" ]; then
+            echo "libintl.8.dylib found at /opt/homebrew/opt/gettext/lib/"
+          else
+            echo "libintl.8.dylib not found at /opt/homebrew/opt/gettext/lib/"
+            exit 1
+          fi
+          echo "Checking architecture of libintl.8.dylib"
+          file /opt/homebrew/opt/gettext/lib/libintl.8.dylib
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.9'
+
+      - name: Debug - Verify Python architecture
+        run: |
+          python3 --version
+          file $(which python3)
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install briefcase toml PyQt6
+
+      - name: Check and update Briefcase version
+        run: |
+          echo "Current Briefcase version:"
+          briefcase --version
+          echo "Updating Briefcase to the latest version..."
+          pip install --upgrade briefcase
+          echo "Updated Briefcase version:"
+          briefcase --version
+
+      - name: Debug - Inspect pyproject.toml
+        run: |
+          echo "Contents of pyproject.toml:"
+          cat pyproject.toml
+
+      - name: Extract version from pyproject.toml
+        id: extract_version
+        shell: bash
+        run: |
+          if [ ! -f "pyproject.toml" ]; then
+            echo "pyproject.toml not found!"
+            exit 1
+          fi
+          echo "Contents of pyproject.toml:"
+          cat pyproject.toml
+          VERSION=$(python -c "import toml; print(toml.load('pyproject.toml')['tool']['briefcase']['version'])")
+          if [ -z "$VERSION" ]; then
+            echo "Failed to extract version from pyproject.toml!"
+            exit 1
+          fi
+          echo "version=$VERSION" >> $GITHUB_OUTPUT
+          echo "Extracted version: $VERSION"
+
+      - name: Create commit match indicator file
+        shell: bash
+        run: |
+          echo "true" > commit-match.txt
+
+      - name: Upload commit match indicator
+        uses: actions/upload-artifact@v4
+        with:
+          name: commit-match-indicator-macos-arm64
+          path: commit-match.txt
+
+      - name: Build with Briefcase
+        shell: bash
+        run: |
+          briefcase create
+          briefcase build
+          briefcase package --adhoc-sign
+        env:
+          BRIEFCASE_PLATFORM: macOS
+
+      - name: Normalize directory case
+        shell: bash
+        run: |
+          if [ -d "MacOS" ]; then
+            mv MacOS macOS
+          fi
+
+      - name: Debug - List output files
+        shell: bash
+        run: |
+          echo "Listing directories to check case:"
+          ls -ld macOS MacOS dist 2>/dev/null || true
+          echo "Listing all files in workspace:"
+          find . -type f
+          echo "Listing output files (DMG):"
+          find . -type f | grep -E '\.(dmg)$'
+          echo "Expected DMG file path: dist/${{ env.dist }}-${{ steps.extract_version.outputs.version }}.dmg"
+          if [ -f "dist/${{ env.dist }}-${{ steps.extract_version.outputs.version }}.dmg" ]; then
+            echo "DMG file found at expected path."
+          else
+            echo "DMG file not found at expected path!"
+            exit 1
+          fi
+
+      - name: Rename DMG file
+        shell: bash
+        run: |
+          cp dist/${{ env.dist }}-${{ steps.extract_version.outputs.version }}.dmg dist/M-${{ env.name }}-${{ steps.extract_version.outputs.version }}-arm64.dmg
+          rm dist/${{ env.dist }}-${{ steps.extract_version.outputs.version }}.dmg
+
+      - name: Upload artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ env.name }}-macos-arm64
+          path: dist/M-${{ env.name }}-${{ steps.extract_version.outputs.version }}-arm64.dmg
+          include-hidden-files: true
+
+  build-macos-x86_64:
+    needs: check-for-building
+    if: needs.check-for-building.outputs.match == 'true'
+    runs-on: macos-13
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Install gettext
+        run: |
+          brew unlink gettext || true
+          brew install gettext
+          brew link gettext --force
+          export DYLD_LIBRARY_PATH="/usr/local/opt/gettext/lib:$DYLD_LIBRARY_PATH"
+          echo "DYLD_LIBRARY_PATH=$DYLD_LIBRARY_PATH" >> $GITHUB_ENV
+          if [ -f "/usr/local/opt/gettext/lib/libintl.8.dylib" ]; then
+            echo "libintl.8.dylib found at /usr/local/opt/gettext/lib/"
+          else
+            echo "libintl.8.dylib not found at /usr/local/opt/gettext/lib/"
+            exit 1
+          fi
+          echo "Checking architecture of libintl.8.dylib"
+          file /usr/local/opt/gettext/lib/libintl.8.dylib
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.9'
+          architecture: 'x64'
+
+      - name: Debug - Verify Python architecture
+        run: |
+          python3 --version
+          file $(which python3)
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install briefcase toml PyQt6
+
+      - name: Check and update Briefcase version
+        run: |
+          echo "Current Briefcase version:"
+          briefcase --version
+          echo "Updating Briefcase to the latest version..."
+          pip install --upgrade briefcase
+          echo "Updated Briefcase version:"
+          briefcase --version
+
+      - name: Debug - Inspect pyproject.toml
+        run: |
+          echo "Contents of pyproject.toml:"
+          cat pyproject.toml
+
+      - name: Extract version from pyproject.toml
+        id: extract_version
+        shell: bash
+        run: |
+          if [ ! -f "pyproject.toml" ]; then
+            echo "pyproject.toml not found!"
+            exit 1
+          fi
+          echo "Contents of pyproject.toml:"
+          cat pyproject.toml
+          VERSION=$(python -c "import toml; print(toml.load('pyproject.toml')['tool']['briefcase']['version'])")
+          if [ -z "$VERSION" ]; then
+            echo "Failed to extract version from pyproject.toml!"
+            exit 1
+          fi
+          echo "version=$VERSION" >> $GITHUB_OUTPUT
+          echo "Extracted version: $VERSION"
+
+      - name: Create commit match indicator file
+        shell: bash
+        run: |
+          echo "true" > commit-match.txt
+
+      - name: Upload commit match indicator
+        uses: actions/upload-artifact@v4
+        with:
+          name: commit-match-indicator-macos-x86_64
+          path: commit-match.txt
+
+      - name: Build with Briefcase
+        shell: bash
+        run: |
+          briefcase create
+          briefcase build
+          briefcase package --adhoc-sign
+        env:
+          BRIEFCASE_PLATFORM: macOS
+
+      - name: Normalize directory case
+        shell: bash
+        run: |
+          if [ -d "MacOS" ]; then
+            mv MacOS macOS
+          fi
+
+      - name: Debug - List output files
+        shell: bash
+        run: |
+          echo "Listing directories to check case:"
+          ls -ld macOS MacOS dist 2>/dev/null || true
+          echo "Listing all files in workspace:"
+          find . -type f
+          echo "Listing output files (DMG):"
+          find . -type f | grep -E '\.(dmg)$'
+          echo "Expected DMG file path: dist/${{ env.dist }}-${{ steps.extract_version.outputs.version }}.dmg"
+          if [ -f "dist/${{ env.dist }}-${{ steps.extract_version.outputs.version }}.dmg" ]; then
+            echo "DMG file found at expected path."
+          else
+            echo "DMG file not found at expected path!"
+            exit 1
+          fi
+
+      - name: Rename DMG file
+        shell: bash
+        run: |
+          cp dist/${{ env.dist }}-${{ steps.extract_version.outputs.version }}.dmg dist/M-${{ env.name }}-${{ steps.extract_version.outputs.version }}-x86_64.dmg
+          rm dist/${{ env.dist }}-${{ steps.extract_version.outputs.version }}.dmg
+
+      - name: Upload artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ env.name }}-macos-x86_64
+          path: dist/M-${{ env.name }}-${{ steps.extract_version.outputs.version }}-x86_64.dmg
+          include-hidden-files: true
+
+  build-ubuntu-deb:
+    needs: check-for-building
+    if: needs.check-for-building.outputs.match == 'true'
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+          architecture: 'x64'
+
+      - name: Debug - Verify Python version
+        run: |
+          echo "Python version used by the workflow:"
+          python3 --version
+          echo "System Python version:"
+          /usr/bin/python3 --version
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install briefcase toml PyQt6
+
+      - name: Check and update Briefcase version
+        run: |
+          echo "Current Briefcase version:"
+          briefcase --version
+          echo "Updating Briefcase to the latest version..."
+          pip install --upgrade briefcase
+          echo "Updated Briefcase version:"
+          briefcase --version
+
+      - name: Debug - Inspect pyproject.toml
+        run: |
+          echo "Contents of pyproject.toml:"
+          cat pyproject.toml
+
+      - name: Debug - Log commit message
+        run: |
+          echo "Commit message: ${{ github.event.head_commit.message }}"
+
+      - name: Extract version from pyproject.toml
+        id: extract_version
+        shell: bash
+        run: |
+          if [ ! -f "pyproject.toml" ]; then
+            echo "pyproject.toml not found!"
+            exit 1
+          fi
+          echo "Contents of pyproject.toml:"
+          cat pyproject.toml
+          VERSION=$(python -c "import toml; print(toml.load('pyproject.toml')['tool']['briefcase']['version'])")
+          if [ -z "$VERSION" ]; then
+            echo "Failed to extract version from pyproject.toml!"
+            exit 1
+          fi
+          echo "version=$VERSION" >> $GITHUB_OUTPUT
+          echo "Extracted version: $VERSION"
+
+      - name: Create commit match indicator file
+        shell: bash
+        run: |
+          echo "true" > commit-match.txt
+
+      - name: Upload commit match indicator
+        uses: actions/upload-artifact@v4
+        with:
+          name: commit-match-indicator-ubuntu-deb
+          path: commit-match.txt
+
+      - name: Build with Briefcase in Docker
+        run: |
+          docker run --rm -v $(pwd):/app -w /app ubuntu:noble /bin/bash -c "
+            apt-get update &&
+            apt-get install -y python3 python3-pip python3-venv libqt6core6 libqt6gui6 libqt6widgets6 git &&
+            python3 -m venv /app/venv &&
+            . /app/venv/bin/activate &&
+            pip install --upgrade pip &&
+            pip install briefcase toml PyQt6 &&
+            briefcase create &&
+            briefcase build &&
+            briefcase package -p deb
+          "
+        env:
+          BRIEFCASE_PLATFORM: linux
+
+      - name: Normalize directory case
+        shell: bash
+        run: |
+          if [ -d "Linux" ]; then
+            mv Linux linux
+          fi
+
+      - name: Fix permissions
+        shell: bash
+        run: |
+          sudo chown -R runner:runner dist
+          ls -ld dist
+          ls -l dist
+
+      - name: Debug - List output files
+        shell: bash
+        run: |
+          echo "Listing directories to check case:"
+          ls -ld linux Linux 2>/dev/null || true
+          echo "Listing all files in workspace:"
+          find . -type f
+          echo "Listing output files (DEB):"
+          find . -type f | grep -E '\.deb$'
+          echo "Expected DEB file path: dist/${{ env.dist }}_${{ steps.extract_version.outputs.version }}-1~ubuntu-noble_amd64.deb"
+          if [ -f "dist/${{ env.dist }}_${{ steps.extract_version.outputs.version }}-1~ubuntu-noble_amd64.deb" ]; then
+            echo "DEB file found at expected path."
+          else
+            echo "DEB file not found at expected path!"
+            exit 1
+          fi
+
+      - name: Rename DEB file
+        shell: bash
+        run: |
+          cp dist/${{ env.dist }}_${{ steps.extract_version.outputs.version }}-1~ubuntu-noble_amd64.deb dist/L-${{ env.name }}-${{ steps.extract_version.outputs.version }}-1~ubuntu-noble_amd64.deb
+          rm dist/${{ env.dist }}_${{ steps.extract_version.outputs.version }}-1~ubuntu-noble_amd64.deb
+
+      - name: Upload artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ env.name }}-ubuntu-deb
+          path: dist/L-${{ env.name }}-${{ steps.extract_version.outputs.version }}-1~ubuntu-noble_amd64.deb
+          include-hidden-files: true
+
+  build-ubuntu-rpm:
+    needs: check-for-building
+    if: needs.check-for-building.outputs.match == 'true'
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+          architecture: 'x64'
+
+      - name: Debug - Verify Python version
+        run: |
+          echo "Python version used by the workflow:"
+          python3 --version
+          echo "System Python version:"
+          /usr/bin/python3 --version
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install briefcase toml PyQt6
+
+      - name: Check and update Briefcase version
+        run: |
+          echo "Current Briefcase version:"
+          briefcase --version
+          echo "Updating Briefcase to the latest version..."
+          pip install --upgrade briefcase
+          echo "Updated Briefcase version:"
+          briefcase --version
+
+      - name: Debug - Inspect pyproject.toml
+        run: |
+          echo "Contents of pyproject.toml:"
+          cat pyproject.toml
+
+      - name: Debug - Log commit message
+        run: |
+          echo "Commit message: ${{ github.event.head_commit.message }}"
+
+      - name: Extract version from pyproject.toml
+        id: extract_version
+        shell: bash
+        run: |
+          if [ ! -f "pyproject.toml" ]; then
+            echo "pyproject.toml not found!"
+            exit 1
+          fi
+          echo "Contents of pyproject.toml:"
+          cat pyproject.toml
+          VERSION=$(python -c "import toml; print(toml.load('pyproject.toml')['tool']['briefcase']['version'])")
+          if [ -z "$VERSION" ]; then
+            echo "Failed to extract version from(pyproject.toml!"
+            exit 1
+          fi
+          echo "version=$VERSION" >> $GITHUB_OUTPUT
+          echo "Extracted version: $VERSION"
+
+      - name: Create commit match indicator file
+        shell: bash
+        run: |
+          echo "true" > commit-match.txt
+
+      - name: Upload commit match indicator
+        uses: actions/upload-artifact@v4
+        with:
+          name: commit-match-indicator-ubuntu-rpm
+          path: commit-match.txt
+
+      - name: Build with Briefcase in Docker
+        run: |
+          docker run --rm -v $(pwd):/app -w /app fedora:latest /bin/bash -c "
+            dnf install -y python3 python3-pip python3-devel gcc qt6-qtbase qt6-qtbase-devel git rpm-build &&
+            python3 -m venv /app/venv &&
+            . /app/venv/bin/activate &&
+            pip install --upgrade pip &&
+            pip install briefcase toml PyQt6 &&
+            briefcase create &&
+            briefcase build &&
+            briefcase package -p rpm
+          "
+        env:
+          BRIEFCASE_PLATFORM: linux
+
+      - name: Normalize directory case
+        shell: bash
+        run: |
+          if [ -d "Linux" ]; then
+            mv Linux linux
+          fi
+
+      - name: Fix permissions
+        shell: bash
+        run: |
+          sudo chown -R runner:runner dist
+          ls -ld dist
+          ls -l dist
+
+      - name: Debug - List output files
+        shell: bash
+        run: |
+          echo "Listing directories to check case:"
+          ls -ld linux Linux 2>/dev/null || true
+          echo "Listing all files in workspace:"
+          find . -type f
+          echo "Listing output files (RPM):"
+          find . -type f | grep -E '\.rpm$'
+          echo "Expected RPM file path: dist/${{ env.dist }}-${{ steps.extract_version.outputs.version }}-1.fc41.x86_64.rpm"
+          if [ -f "dist/${{ env.dist }}-${{ steps.extract_version.outputs.version }}-1.fc41.x86_64.rpm" ]; then
+            echo "RPM file found at expected path."
+          else
+            echo "RPM file not found at expected path!"
+            exit 1
+          fi
+
+      - name: Rename RPM file
+        shell: bash
+        run: |
+          cp dist/${{ env.dist }}-${{ steps.extract_version.outputs.version }}-1.fc41.x86_64.rpm dist/L-${{ env.name }}-${{ steps.extract_version.outputs.version }}-1.fc41.x86_64.rpm
+          rm dist/${{ env.dist }}-${{ steps.extract_version.outputs.version }}-1.fc41.x86_64.rpm
+
+      - name: Upload artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ env.name }}-ubuntu-rpm
+          path: dist/L-${{ env.name }}-${{ steps.extract_version.outputs.version }}-1.fc41.x86_64.rpm
+          include-hidden-files: true
+
+  build-ubuntu-pkg:
+    needs: check-for-building
+    if: needs.check-for-building.outputs.match == 'true'
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+          architecture: 'x64'
+
+      - name: Debug - Verify Python version
+        run: |
+          echo "Python version used by the workflow:"
+          python3 --version
+          echo "System Python version:"
+          /usr/bin/python3 --version
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install briefcase toml PyQt6
+
+      - name: Check and update Briefcase version
+        run: |
+          echo "Current Briefcase version:"
+          briefcase --version
+          echo "Updating Briefcase to the latest version..."
+          pip install --upgrade briefcase
+          echo "Updated Briefcase version:"
+          briefcase --version
+
+      - name: Debug - Inspect pyproject.toml
+        run: |
+          echo "Contents of pyproject.toml:"
+          cat pyproject.toml
+
+      - name: Debug - Log commit message
+        run: |
+          echo "Commit message: ${{ github.event.head_commit.message }}"
+
+      - name: Extract version from pyproject.toml
+        id: extract_version
+        shell: bash
+        run: |
+          if [ ! -f "pyproject.toml" ]; then
+            echo "pyproject.toml not found!"
+            exit 1
+          fi
+          echo "Contents of pyproject.toml:"
+          cat pyproject.toml
+          VERSION=$(python -c "import toml; print(toml.load('pyproject.toml')['tool']['briefcase']['version'])")
+          if [ -z "$VERSION" ]; then
+            echo "Failed to extract version from pyproject.toml!"
+            exit 1
+          fi
+          echo "version=$VERSION" >> $GITHUB_OUTPUT
+          echo "Extracted version: $VERSION"
+
+      - name: Create commit match indicator file
+        shell: bash
+        run: |
+          echo "true" > commit-match.txt
+
+      - name: Upload commit match indicator
+        uses: actions/upload-artifact@v4
+        with:
+          name: commit-match-indicator-ubuntu-pkg
+          path: commit-match.txt
+
+      - name: Build with Briefcase in Docker
+        run: |
+          docker run --rm -v $(pwd):/app -w /app archlinux:latest /bin/bash -c "
+            pacman -Syu --noconfirm &&
+            pacman -S --noconfirm python python-pip base-devel qt6-base git &&
+            useradd -m -s /bin/bash builduser &&
+            chown -R builduser:builduser /app &&
+            chmod -R u+rw /app &&
+            su - builduser -c '
+              cd /app &&
+              python -m venv /app/venv &&
+              . /app/venv/bin/activate &&
+              pip install --upgrade pip &&
+              pip install briefcase toml PyQt6 &&
+              briefcase create &&
+              briefcase build &&
+              briefcase package -p pkg
+            '
+          "
+        env:
+          BRIEFCASE_PLATFORM: linux
+
+      - name: Normalize directory case
+        shell: bash
+        run: |
+          if [ -d "Linux" ]; then
+            mv Linux linux
+          fi
+
+      - name: Fix permissions
+        shell: bash
+        run: |
+          sudo chown -R runner:runner dist
+          ls -ld dist
+          ls -l dist
+
+      - name: Debug - List output files
+        shell: bash
+        run: |
+          echo "Listing directories to check case:"
+          ls -ld linux Linux 2>/dev/null || true
+          echo "Listing all files in workspace:"
+          find . -type f
+          echo "Listing output files (PKG):"
+          find . -type f | grep -E '\.pkg\.tar\.zst$'
+          echo "Expected PKG file path: dist/${{ env.dist }}-${{ steps.extract_version.outputs.version }}-1-x86_64.pkg.tar.zst"
+          if [ -f "dist/${{ env.dist }}-${{ steps.extract_version.outputs.version }}-1-x86_64.pkg.tar.zst" ]; then
+            echo "PKG file found at expected path."
+          else
+            echo "PKG file not found at expected path!"
+            exit 1
+          fi
+
+      - name: Rename PKG file
+        shell: bash
+        run: |
+          cp dist/${{ env.dist }}-${{ steps.extract_version.outputs.version }}-1-x86_64.pkg.tar.zst dist/L-${{ env.name }}-${{ steps.extract_version.outputs.version }}-1-x86_64.pkg.tar.zst
+          rm dist/${{ env.dist }}-${{ steps.extract_version.outputs.version }}-1-x86_64.pkg.tar.zst
+
+      - name: Upload artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ env.name }}-ubuntu-pkg
+          path: dist/L-${{ env.name }}-${{ steps.extract_version.outputs.version }}-1-x86_64.pkg.tar.zst
+          include-hidden-files: true
+
+  build-windows-portable:
+    needs: check-for-building
+    if: needs.check-for-building.outputs.match == 'true'
+    runs-on: windows-latest
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.9'
+          architecture: 'x64'
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+          pip install pyinstaller toml
+
+      - name: Check PyInstaller version
+        run: |
+          pyinstaller --version
+
+      - name: Debug - Log commit message
+        run: |
+          echo "Commit message: ${{ github.event.head_commit.message }}"
+
+      - name: Extract version from pyproject.toml
+        id: extract_version
+        shell: bash
+        run: |
+          if [ ! -f "pyproject.toml" ]; then
+            echo "pyproject.toml not found!"
+            exit 1
+          fi
+          echo "Contents of pyproject.toml:"
+          cat pyproject.toml
+          VERSION=$(python -c "import toml; print(toml.load('pyproject.toml')['tool']['briefcase']['version'])")
+          if [ -z "$VERSION" ]; then
+            echo "Failed to extract version from pyproject.toml!"
+            exit 1
+          fi
+          echo "version=$VERSION" >> $GITHUB_OUTPUT
+          echo "Extracted version: $VERSION"
+
+      - name: Create commit match indicator file
+        shell: bash
+        run: |
+          echo "true" > commit-match.txt
+
+      - name: Upload commit match indicator
+        uses: actions/upload-artifact@v4
+        with:
+          name: commit-match-indicator-windows-portable
+          path: commit-match.txt
+
+      - name: Create version file for PyInstaller
+        shell: bash
+        run: |
+          VERSION="${{ steps.extract_version.outputs.version }}"
+          # Replace dots with commas for filevers and prodvers
+          VERSION_COMMA=$(echo "$VERSION" | sed 's/\./, /g')
+          cat > version_info.txt << EOL
+          VSVersionInfo(
+            ffi=FixedFileInfo(
+              filevers=($VERSION_COMMA, 0),
+              prodvers=($VERSION_COMMA, 0),
+              mask=0x3f,
+              flags=0x0,
+              OS=0x40004,
+              fileType=0x1,
+              subtype=0x0,
+              date=(0, 0)
+            ),
+            kids=[
+              StringFileInfo(
+                [
+                  StringTable(
+                    u'040904B0',
+                    [
+                      StringStruct(u'CompanyName', u'VoxDroid - github.com/VoxDroid'),
+                      StringStruct(u'FileDescription', u'${{ env.name }} - github.com/VoxDroid/${{ env.name }}'),
+                      StringStruct(u'FileVersion', u'$VERSION'),
+                      StringStruct(u'LegalCopyright', u'Copyright (c) 2025 Izeno'),
+                      StringStruct(u'ProductName', u'${{ env.name }} $VERSION'),
+                      StringStruct(u'ProductVersion', u'$VERSION')
+                    ]
+                  )
+                ]
+              ),
+              VarFileInfo([VarStruct(u'Translation', [0x0409, 1200])])
+            ]
+          )
+          EOL
+
+      - name: Build with PyInstaller
+        shell: bash
+        run: |
+          pyinstaller --onefile \
+            --noconsole \
+            --icon "assets/icons/ATM.ico" \
+            --add-data "src/${{ env.src }}/resources/ATM.ico;resources/" \
+            --version-file version_info.txt \
+            --distpath dist \
+            --workpath build \
+            --name "${{ env.name }}" \
+            src/${{ env.src }}/app.py
+            echo "Listing files in build directory:"
+            find build -type f
+
+      - name: Normalize directory case
+        shell: bash
+        run: |
+          if [ -d "Dist" ]; then
+            mv Dist dist
+          fi
+
+      - name: Rename EXE file
+        id: rename_exe
+        shell: bash
+        run: |
+          cp dist/${{ env.dist }}.exe dist/W-${{ env.name }}-${{ steps.extract_version.outputs.version }}-x86_64-Portable.exe
+          rm dist/${{ env.dist }}.exe
+
+      - name: Debug - List output files
+        shell: bash
+        run: |
+          echo "Listing directories to check case:"
+          ls -ld dist Dist 2>/dev/null || true
+          echo "Listing output files:"
+          find . -type f | grep -E '\.(exe)$'
+
+      - name: Upload artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ env.name }}-windows-portable
+          path: dist/W-${{ env.name }}-${{ steps.extract_version.outputs.version }}-x86_64-Portable.exe
+          include-hidden-files: true
+
+  release:
+    needs: [build-windows, build-macos-arm64, build-macos-x86_64, build-ubuntu-deb, build-ubuntu-rpm, build-ubuntu-pkg, build-windows-portable]
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Install jq
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y jq
+
+      - name: Download commit match indicators
+        uses: actions/download-artifact@v4
+        with:
+          path: commit-match-artifacts
+
+      - name: Debug - List downloaded commit match indicators
+        shell: bash
+        run: |
+          echo "Listing downloaded commit match indicators:"
+          find commit-match-artifacts -type f
+
+      - name: Read commit match indicators
+        id: read_commit_match
+        shell: bash
+        run: |
+          MATCH=true
+          for job in windows macos-arm64 macos-x86_64 ubuntu-deb ubuntu-rpm ubuntu-pkg windows-portable; do
+            FILE="commit-match-artifacts/commit-match-indicator-$job/commit-match.txt"
+            if [ -f "$FILE" ]; then
+              CONTENT=$(cat "$FILE")
+              echo "Commit match for $job: $CONTENT"
+              if [ "$CONTENT" != "true" ]; then
+                MATCH=false
+              fi
+            else
+              echo "Commit match indicator for $job not found!"
+              MATCH=false
+            fi
+          done
+          echo "commit_match=$MATCH" >> $GITHUB_OUTPUT
+          echo "Overall commit match: $MATCH"
+
+      - name: Check if release should proceed
+        if: steps.read_commit_match.outputs.commit_match != 'true'
+        shell: bash
+        run: |
+          echo "Commit message did not match the version in one or more jobs. Skipping release job."
+          exit 0
+
+      - name: Set up Python
+        if: steps.read_commit_match.outputs.commit_match == 'true'
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.9'
+          architecture: 'x64'
+
+      - name: Install dependencies
+        if: steps.read_commit_match.outputs.commit_match == 'true'
+        run: |
+          python -m pip install --upgrade pip
+          pip install toml
+
+      - name: Extract version from pyproject.toml
+        if: steps.read_commit_match.outputs.commit_match == 'true'
+        id: extract_version
+        shell: bash
+        run: |
+          if [ ! -f "pyproject.toml" ]; then
+            echo "pyproject.toml not found!"
+            exit 1
+          fi
+          echo "Contents of pyproject.toml:"
+          cat pyproject.toml
+          VERSION=$(python -c "import toml; print(toml.load('pyproject.toml')['tool']['briefcase']['version'])")
+          if [ -z "$VERSION" ]; then
+            echo "Failed to extract version from pyproject.toml!"
+            exit 1
+          fi
+          echo "version=$VERSION" >> $GITHUB_OUTPUT
+          echo "Extracted version: $VERSION"
+
+      - name: Check if tag exists
+        if: steps.read_commit_match.outputs.commit_match == 'true'
+        id: check_tag
+        shell: bash
+        run: |
+          TAG="v${{ steps.extract_version.outputs.version }}"
+          git fetch --tags
+          if git rev-parse "$TAG" >/dev/null 2>&1; then
+            echo "Tag $TAG exists."
+            echo "tag_exists=true" >> $GITHUB_OUTPUT
+          else
+            echo "Tag $TAG does not exist."
+            echo "tag_exists=false" >> $GITHUB_OUTPUT
+          fi
+
+      - name: Check if release already exists
+        if: steps.read_commit_match.outputs.commit_match == 'true'
+        id: check_release
+        shell: bash
+        run: |
+          TAG="v${{ steps.extract_version.outputs.version }}"
+          RESPONSE=$(curl -s -H "Authorization: token ${{ secrets[env.secret] }}" \
+            "https://api.github.com/repos/${{ github.repository }}/releases/tags/$TAG")
+          if echo "$RESPONSE" | grep -q '"message": "Not Found"'; then
+            echo "exists=false" >> $GITHUB_OUTPUT
+            echo "Release does not exist for tag $TAG. Proceeding to create release."
+          else
+            echo "exists=true" >> $GITHUB_OUTPUT
+            echo "Release already exists for tag $TAG. Skipping release creation."
+            echo "Release details: $RESPONSE"
+          fi
+          echo "Release exists: ${{ steps.check_release.outputs.exists }}"
+
+      - name: Download artifacts
+        if: steps.read_commit_match.outputs.commit_match == 'true'
+        uses: actions/download-artifact@v4
+        with:
+          path: artifacts
+
+      - name: Debug - List downloaded artifacts
+        if: steps.read_commit_match.outputs.commit_match == 'true'
+        shell: bash
+        run: |
+          echo "Listing downloaded artifacts:"
+          find artifacts -type f
+
+      - name: Create Draft Release
+        if: steps.read_commit_match.outputs.commit_match == 'true' && steps.check_release.outputs.exists == 'false'
+        id: create_draft_release
+        shell: bash
+        run: |
+          TAG="v${{ steps.extract_version.outputs.version }}"
+          RESPONSE=$(curl -s -X POST \
+            -H "Authorization: token ${{ secrets[env.secret] }}" \
+            -H "Accept: application/vnd.github.v3+json" \
+            "https://api.github.com/repos/${{ github.repository }}/releases" \
+            -d "{\"tag_name\":\"$TAG\",\"name\":\"${{ env.name }} $TAG\",\"draft\":true,\"prerelease\":false,\"body\":\"\"}")
+          echo "Create draft release response: $RESPONSE"
+          UPLOAD_URL=$(echo "$RESPONSE" | jq -r '.upload_url' | sed 's/{?name,label}//')
+          RELEASE_ID=$(echo "$RESPONSE" | jq -r '.id')
+          if [ -z "$UPLOAD_URL" ] || [ -z "$RELEASE_ID" ]; then
+            echo "Failed to create draft release. Response: $RESPONSE"
+            exit 1
+          fi
+          echo "upload_url=$UPLOAD_URL" >> $GITHUB_OUTPUT
+          echo "release_id=$RELEASE_ID" >> $GITHUB_OUTPUT
+
+      - name: Upload Windows Release Asset
+        if: steps.read_commit_match.outputs.commit_match == 'true' && steps.check_release.outputs.exists == 'false'
+        shell: bash
+        run: |
+          ASSET_PATH="artifacts/${{ env.name }}-windows-latest/W-${{ env.name }}-${{ steps.extract_version.outputs.version }}-x86_64.msi"
+          ASSET_NAME="W-${{ env.name }}-${{ steps.extract_version.outputs.version }}-x86_64.msi"
+          if [ ! -f "$ASSET_PATH" ]; then
+            echo "Asset file not found at $ASSET_PATH"
+            exit 1
+          fi
+          RESPONSE=$(curl -s -X POST \
+            -H "Authorization: token ${{ secrets[env.secret] }}" \
+            -H "Accept: application/vnd.github.v3+json" \
+            -H "Content-Type: application/x-msi" \
+            --data-binary "@$ASSET_PATH" \
+            "${{ steps.create_draft_release.outputs.upload_url }}?name=$ASSET_NAME")
+          echo "Upload asset response: $RESPONSE"
+          STATE=$(echo "$RESPONSE" | jq -r '.state')
+          if [ "$STATE" = "uploaded" ]; then
+            echo "Asset uploaded successfully."
+          else
+            echo "Failed to upload asset. Response: $RESPONSE"
+            exit 1
+          fi
+
+      - name: Upload macOS (arm64) Release Asset
+        if: steps.read_commit_match.outputs.commit_match == 'true' && steps.check_release.outputs.exists == 'false'
+        shell: bash
+        run: |
+          ASSET_PATH="artifacts/${{ env.name }}-macos-arm64/M-${{ env.name }}-${{ steps.extract_version.outputs.version }}-arm64.dmg"
+          ASSET_NAME="M-${{ env.name }}-${{ steps.extract_version.outputs.version }}-arm64.dmg"
+          if [ ! -f "$ASSET_PATH" ]; then
+            echo "Asset file not found at $ASSET_PATH"
+            exit 1
+          fi
+          RESPONSE=$(curl -s -X POST \
+            -H "Authorization: token ${{ secrets[env.secret] }}" \
+            -H "Accept: application/vnd.github.v3+json" \
+            -H "Content-Type: application/x-apple-diskimage" \
+            --data-binary "@$ASSET_PATH" \
+            "${{ steps.create_draft_release.outputs.upload_url }}?name=$ASSET_NAME")
+          echo "Upload asset response: $RESPONSE"
+          STATE=$(echo "$RESPONSE" | jq -r '.state')
+          if [ "$STATE" = "uploaded" ]; then
+            echo "Asset uploaded successfully."
+          else
+            echo "Failed to upload asset. Response: $RESPONSE"
+            exit 1
+          fi
+
+      - name: Upload macOS (x86_64) Release Asset
+        if: steps.read_commit_match.outputs.commit_match == 'true' && steps.check_release.outputs.exists == 'false'
+        shell: bash
+        run: |
+          ASSET_PATH="artifacts/${{ env.name }}-macos-x86_64/M-${{ env.name }}-${{ steps.extract_version.outputs.version }}-x86_64.dmg"
+          ASSET_NAME="M-${{ env.name }}-${{ steps.extract_version.outputs.version }}-x86_64.dmg"
+          if [ ! -f "$ASSET_PATH" ]; then
+            echo "Asset file not found at $ASSET_PATH"
+            exit 1
+          fi
+          RESPONSE=$(curl -s -X POST \
+            -H "Authorization: token ${{ secrets[env.secret] }}" \
+            -H "Accept: application/vnd.github.v3+json" \
+            -H "Content-Type: application/x-apple-diskimage" \
+            --data-binary "@$ASSET_PATH" \
+            "${{ steps.create_draft_release.outputs.upload_url }}?name=$ASSET_NAME")
+          echo "Upload asset response: $RESPONSE"
+          STATE=$(echo "$RESPONSE" | jq -r '.state')
+          if [ "$STATE" = "uploaded" ]; then
+            echo "Asset uploaded successfully."
+          else
+            echo "Failed to upload asset. Response: $RESPONSE"
+            exit 1
+          fi
+
+      - name: Upload Debian (.deb) Release Asset
+        if: steps.read_commit_match.outputs.commit_match == 'true' && steps.check_release.outputs.exists == 'false'
+        shell: bash
+        run: |
+          ASSET_PATH="artifacts/${{ env.name }}-ubuntu-deb/L-${{ env.name }}-${{ steps.extract_version.outputs.version }}-1~ubuntu-noble_amd64.deb"
+          ASSET_NAME="L-${{ env.name }}-${{ steps.extract_version.outputs.version }}-1~ubuntu-noble_amd64.deb"
+          if [ ! -f "$ASSET_PATH" ]; then
+            echo "Asset file not found at $ASSET_PATH"
+            exit 1
+          fi
+          RESPONSE=$(curl -s -X POST \
+            -H "Authorization: token ${{ secrets[env.secret] }}" \
+            -H "Accept: application/vnd.github.v3+json" \
+            -H "Content-Type: application/octet-stream" \
+            --data-binary "@$ASSET_PATH" \
+            "${{ steps.create_draft_release.outputs.upload_url }}?name=$ASSET_NAME")
+          echo "Upload asset response: $RESPONSE"
+          STATE=$(echo "$RESPONSE" | jq -r '.state')
+          if [ "$STATE" = "uploaded" ]; then
+            echo "Asset uploaded successfully."
+          else
+            echo "Failed to upload asset. Response: $RESPONSE"
+            exit 1
+          fi
+
+      - name: Upload Red Hat (.rpm) Release Asset
+        if: steps.read_commit_match.outputs.commit_match == 'true' && steps.check_release.outputs.exists == 'false'
+        shell: bash
+        run: |
+          ASSET_PATH="artifacts/${{ env.name }}-ubuntu-rpm/L-${{ env.name }}-${{ steps.extract_version.outputs.version }}-1.fc41.x86_64.rpm"
+          ASSET_NAME="L-${{ env.name }}-${{ steps.extract_version.outputs.version }}-1.fc41.x86_64.rpm"
+          if [ ! -f "$ASSET_PATH" ]; then
+            echo "Asset file not found at $ASSET_PATH"
+            exit 1
+          fi
+          RESPONSE=$(curl -s -X POST \
+            -H "Authorization: token ${{ secrets[env.secret] }}" \
+            -H "Accept: application/vnd.github.v3+json" \
+            -H "Content-Type: application/octet-stream" \
+            --data-binary "@$ASSET_PATH" \
+            "${{ steps.create_draft_release.outputs.upload_url }}?name=$ASSET_NAME")
+          echo "Upload asset response: $RESPONSE"
+          STATE=$(echo "$RESPONSE" | jq -r '.state')
+          if [ "$STATE" = "uploaded" ]; then
+            echo "Asset uploaded successfully."
+          else
+            echo "Failed to upload asset. Response: $RESPONSE"
+            exit 1
+          fi
+
+      - name: Upload Arch (.pkg.tar.zst) Release Asset
+        if: steps.read_commit_match.outputs.commit_match == 'true' && steps.check_release.outputs.exists == 'false'
+        shell: bash
+        run: |
+          ASSET_PATH="artifacts/${{ env.name }}-ubuntu-pkg/L-${{ env.name }}-${{ steps.extract_version.outputs.version }}-1-x86_64.pkg.tar.zst"
+          ASSET_NAME="L-${{ env.name }}-${{ steps.extract_version.outputs.version }}-1-x86_64.pkg.tar.zst"
+          if [ ! -f "$ASSET_PATH" ]; then
+            echo "Asset file not found at $ASSET_PATH"
+            exit 1
+          fi
+          RESPONSE=$(curl -s -X POST \
+            -H "Authorization: token ${{ secrets[env.secret] }}" \
+            -H "Accept: application/vnd.github.v3+json" \
+            -H "Content-Type: application/octet-stream" \
+            --data-binary "@$ASSET_PATH" \
+            "${{ steps.create_draft_release.outputs.upload_url }}?name=$ASSET_NAME")
+          echo "Upload asset response: $RESPONSE"
+          STATE=$(echo "$RESPONSE" | jq -r '.state')
+          if [ "$STATE" = "uploaded" ]; then
+            echo "Asset uploaded successfully."
+          else
+            echo "Failed to upload asset. Response: $RESPONSE"
+            exit 1
+          fi
+
+      - name: Upload Windows Portable Release Asset
+        if: steps.read_commit_match.outputs.commit_match == 'true' && steps.check_release.outputs.exists == 'false'
+        shell: bash
+        run: |
+          ASSET_PATH="artifacts/${{ env.name }}-windows-portable/W-${{ env.name }}-${{ steps.extract_version.outputs.version }}-x86_64-Portable.exe"
+          ASSET_NAME="W-${{ env.name }}-${{ steps.extract_version.outputs.version }}-x86_64-Portable.exe"
+          if [ ! -f "$ASSET_PATH" ]; then
+            echo "Asset file not found at $ASSET_PATH"
+            exit 1
+          fi
+          RESPONSE=$(curl -s -X POST \
+            -H "Authorization: token ${{ secrets[env.secret] }}" \
+            -H "Accept: application/vnd.github.v3+json" \
+            -H "Content-Type: application/octet-stream" \
+            --data-binary "@$ASSET_PATH" \
+            "${{ steps.create_draft_release.outputs.upload_url }}?name=$ASSET_NAME")
+          echo "Upload asset response: $RESPONSE"
+          STATE=$(echo "$RESPONSE" | jq -r '.state')
+          if [ "$STATE" = "uploaded" ]; then
+            echo "Asset uploaded successfully."
+          else
+            echo "Failed to upload asset. Response: $RESPONSE"
+            exit 1
+          fi
+
+      - name: Publish Release
+        if: steps.read_commit_match.outputs.commit_match == 'true' && steps.check_release.outputs.exists == 'false'
+        shell: bash
+        run: |
+          RELEASE_ID="${{ steps.create_draft_release.outputs.release_id }}"
+          RESPONSE=$(curl -s -X PATCH \
+            -H "Authorization: token ${{ secrets[env.secret] }}" \
+            -H "Accept: application/vnd.github.v3+json" \
+            "https://api.github.com/repos/${{ github.repository }}/releases/$RELEASE_ID" \
+            -d '{"draft": false}')
+          echo "Publish release response: $RESPONSE"
+          if echo "$RESPONSE" | grep -q '"draft": false'; then
+            echo "Release published successfully."
+          else
+            echo "Failed to publish release. Response: $RESPONSE"
+            exit 1
+          fi
+
+      - name: Debug - Verify release publication
+        if: steps.read_commit_match.outputs.commit_match == 'true' && steps.check_release.outputs.exists == 'false'
+        shell: bash
+        run: |
+          TAG="v${{ steps.extract_version.outputs.version }}"
+          RESPONSE=$(curl -s -H "Authorization: token ${{ secrets[env.secret] }}" \
+            "https://api.github.com/repos/${{ github.repository }}/releases/tags/$TAG")
+          if echo "$RESPONSE" | grep -q '"draft": false'; then
+            echo "Release is published with all assets."
+          else
+            echo "Release publication failed or is still a draft. Response: $RESPONSE"
+            exit 1
+          fi
+          echo "Release details: $RESPONSE"

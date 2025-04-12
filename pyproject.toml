@@ -20,6 +20,11 @@ test_sources = [
 ]
 
 requires = [
+    "pyqt6",
+    "qtawesome",
+    "selenium",
+    "webdriver-manager",
+    "psutil"
 ]
 
 test_requires = [

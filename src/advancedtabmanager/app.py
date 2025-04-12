@@ -25,7 +25,7 @@ import random
 import os
 from packaging import version
 
-CURRENT_VERSION = "1.2.0"
+CURRENT_VERSION = "1.3.0"
 GITHUB_REPO = "VoxDroid/Advanced-Tab-Manager"
 
 class VersionChecker(QThread):
