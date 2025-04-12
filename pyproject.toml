@@ -1,4 +1,3 @@
-# This project was generated with 0.3.22 using template: https://github.com/beeware/briefcase-template@v0.3.22
 [tool.briefcase]
 project_name = "AdvancedTabManager"
 bundle = "com.advtabman"
@@ -12,6 +11,7 @@ author_email = "izeno.contact@gmail.com"
 formal_name = "AdvancedTabManager"
 description = "A powerful GUI tool built with Python, PyQt6, and Selenium to automate Chrome tab management. With multi-instance support, multilingual interface, and customizable themes, it’s ideal for browser automation, testing, and repetitive tasks."
 long_description = """Advanced Tab Manager Pro is a sophisticated desktop application designed to automate browser tab management using Python, PyQt6, and Selenium. This tool enables users to open and close Chrome tabs programmatically with extensive customization options, including multiple browser instances, proxy settings, and real-time system monitoring. Featuring a modern GUI with multilingual support and customizable themes, it’s perfect for developers, testers, and automation enthusiasts looking to streamline repetitive browser tasks.."""
+icon = "assets/icons/ATM"
 sources = [
     "src/advancedtabmanager",
 ]
@@ -20,57 +20,47 @@ test_sources = [
 ]
 
 requires = [
-    # Add your cross-platform app requirements here
 ]
+
 test_requires = [
-    # Add your cross-platform test requirements here
 ]
+
 
 [tool.briefcase.app.advancedtabmanager.macOS]
 universal_build = true
 requires = [
-    # Add your macOS-specific app requirements here
 ]
 
 [tool.briefcase.app.advancedtabmanager.linux]
 requires = [
-    # Add your Linux-specific app requirements here
 ]
 
 [tool.briefcase.app.advancedtabmanager.linux.system.debian]
 system_requires = [
-    # Add any system packages needed at build the app here
 ]
 
 system_runtime_requires = [
-    # Add any system packages needed at runtime here
 ]
 
 [tool.briefcase.app.advancedtabmanager.linux.system.rhel]
 system_requires = [
-    # Add any system packages needed at build the app here
 ]
 
 system_runtime_requires = [
-    # Add any system packages needed at runtime here
 ]
 
 [tool.briefcase.app.advancedtabmanager.linux.system.suse]
 system_requires = [
-    # Add any system packages needed at build the app here
 ]
 
 system_runtime_requires = [
-    # Add any system packages needed at runtime here
 ]
 
 [tool.briefcase.app.advancedtabmanager.linux.system.arch]
 system_requires = [
-    # Add any system packages needed at build the app here
 ]
 
 system_runtime_requires = [
-    # Add any system packages needed at runtime here
 ]
 
 [tool.briefcase.app.advancedtabmanager.linux.flatpak]
@@ -80,23 +70,19 @@ flatpak_sdk = "org.freedesktop.Sdk"
 
 [tool.briefcase.app.advancedtabmanager.windows]
 requires = [
-    # Add your Windows-specific app requirements here
 ]
 
 # Mobile deployments
 [tool.briefcase.app.advancedtabmanager.iOS]
 requires = [
-    # Add your iOS-specific app requirements here
 ]
 
 [tool.briefcase.app.advancedtabmanager.android]
 requires = [
-    # Add your Android-specific app requirements here
 ]
 
 # Web deployments
 [tool.briefcase.app.advancedtabmanager.web]
 requires = [
-    # Add your web-specific app requirements here
 ]
 
