@@ -8,7 +8,7 @@
 
 <div align="center">
   <a>
-    <img src="https://raw.githubusercontent.com/VoxDroid/Advanced-Tab-Manager/e6ccffd7cc088a67e6b58edd356523312008fd08/assets/svg/github.svg" alt="GitHub" width="100">
+    <img src="https://raw.githubusercontent.com/VoxDroid/Advanced-Tab-Manager/refs/heads/main/assets/svg/github.svg" alt="GitHub" width="100">
   </a>
 </div>
 
