@@ -1,258 +1,320 @@
-# Advanced Tab Manager Pro
+<h1 align="center">Text Extractor</h1>
 
-![GitHub release (latest by date)](https://img.shields.io/github/v/release/VoxDroid/Advanced-Tab-Manager?label=Latest%20Release&style=flat-square)
-![GitHub license](https://img.shields.io/github/license/VoxDroid/Advanced-Tab-Manager?style=flat-square)
-![GitHub issues](https://img.shields.io/github/issues/VoxDroid/Advanced-Tab-Manager?style=flat-square)
-![GitHub stars](https://img.shields.io/github/stars/VoxDroid/Advanced-Tab-Manager?style=flat-square)
-![GitHub forks](https://img.shields.io/github/forks/VoxDroid/Advanced-Tab-Manager?style=flat-square)
-![Python Version](https://img.shields.io/badge/Python-3.8%2B-blue?style=flat-square)
-![Platform](https://img.shields.io/badge/Platform-Windows%20%7C%20Linux%20%7C%20macOS-green?style=flat-square)
+<div align="center">
+  <img src="https://raw.githubusercontent.com/VoxDroid/Advanced-Tab-Manager/refs/heads/main/assets/img/ATM.png" alt="Advanced Tab Manager" width="600"/>
+</div>
 
----
+<br>
 
-## 📖 Overview
+<div align="center">
+  <a>
+    <img src="https://raw.githubusercontent.com/VoxDroid/Advanced-Tab-Manager/e6ccffd7cc088a67e6b58edd356523312008fd08/assets/svg/github.svg" alt="GitHub" width="100">
+  </a>
+</div>
 
-**Advanced Tab Manager Pro** is a sophisticated desktop application designed to automate browser tab management using Python, PyQt6, and Selenium. This tool enables users to open and close Chrome tabs programmatically with extensive customization options, including multiple browser instances, proxy settings, and real-time system monitoring. Featuring a modern GUI with multilingual support and customizable themes, it’s perfect for developers, testers, and automation enthusiasts looking to streamline repetitive browser tasks.
+<br>
 
----
+<div align="center">
+  <a href="https://github.com/VoxDroid/Advanced-Tab-Manager/blob/main/LICENSE">
+    <img src="https://img.shields.io/github/license/VoxDroid/Advanced-Tab-Manager?color=blue" alt="License">
+  </a>
+  <a href="https://github.com/VoxDroid/Advanced-Tab-Manager/releases">
+    <img src="https://img.shields.io/github/downloads/VoxDroid/Advanced-Tab-Manager/total?color=orange" alt="Downloads">
+  </a>
+  <a href="https://github.com/VoxDroid/Advanced-Tab-Manager">
+    <img src="https://img.shields.io/github/stars/VoxDroid/Advanced-Tab-Manager?color=yellow" alt="Stars">
+  </a>
+  <a href="https://github.com/VoxDroid/Advanced-Tab-Manager/forks">
+    <img src="https://img.shields.io/github/forks/VoxDroid/Advanced-Tab-Manager?color=green" alt="Forks">
+  </a>
+  <a href="https://github.com/VoxDroid/Advanced-Tab-Manager/commits/main">
+    <img src="https://img.shields.io/github/last-commit/VoxDroid/Advanced-Tab-Manager?color=purple" alt="Last Commit">
+  </a>
+  <a href="https://github.com/VoxDroid/Advanced-Tab-Manager/issues">
+    <img src="https://img.shields.io/github/issues/VoxDroid/Advanced-Tab-Manager?color=red" alt="Issues">
+  </a>
+  <a href="https://www.python.org/downloads/">
+    <img src="https://img.shields.io/badge/python-3.9%2B-blueviolet" alt="Python Version">
+  </a>
+  <a href="https://github.com/VoxDroid/Advanced-Tab-Manager">
+    <img src="https://img.shields.io/badge/platform-Windows%20%7C%20macOS%20%7C%20Linux-lightgrey" alt="Platforms">
+  </a>
+  <a href="https://github.com/VoxDroid/Advanced-Tab-Manager/releases">
+    <img src="https://img.shields.io/badge/version-v1.3.0-brightgreen" alt="Version">
+  </a>
+  <a>
+    <img src="https://img.shields.io/github/v/release/VoxDroid/Advanced-Tab-Manager?label=Latest%20Release" alt="Latest Release">
+  </a>
+  <a href="https://voxdroid.github.io/Advanced-Tab-Manager/" target="_blank">
+    <img src="https://img.shields.io/badge/Website-Visit%20Now-21262d?logo=github&style=flat&labelColor=21262d&color=58a6ff" alt="Website Badge">
+  </a>
+</div>
 
-## ✨ Features
+<br>
+<p align="center">
+  <a href="https://ko-fi.com/O4O6LO7Q1" target="_blank">
+    <img src="https://ko-fi.com/img/githubbutton_sm.svg" alt="ko-fi" style="border: 0;">
+  </a>
+</p>
+<br>
 
-- **Multi-Instance Tab Management**: Run multiple Chrome instances simultaneously.
-- **Customizable Browser Options**: Headless mode, incognito, proxy support, and more.
-- **Multilingual Interface**: Supports English, Japanese, Korean, Chinese, and Filipino.
-- **Theme Variety**: Six distinct themes (Dark Navy, Light Blue, Dark Green, Light Green, Soft Pink, Soft Lavender).
-- **Real-Time Monitoring**: Track CPU, memory, and disk usage.
-- **Detailed Logging**: Color-coded logs with filtering and export capabilities.
-- **Advanced Settings**: Configure user agents, proxy servers, and additional Chrome arguments.
-- **System Tray Integration**: Minimize to tray (planned feature).
-- **Cross-Platform**: Works on Windows, Linux, and macOS with minor adjustments.
+<hr style="border: 1px dashed #4A6B9A; margin: 20px 0;">
 
----
+Welcome to **[Advanced Tab Manager Pro](https://github.com/VoxDroid/Advanced-Tab-Manager)**, a sophisticated Python-based desktop application built with [PyQt6](https://pypi.org/project/PyQt6/) and [Selenium](https://pypi.org/project/selenium/), designed to automate browser tab management with extensive customization options. This tool is ideal for developers, testers, and automation enthusiasts needing to efficiently manage multiple Chrome tabs across multiple instances, with features like headless mode, proxy support, multilingual interface, and real-time system monitoring.
 
-## 🚀 Installation
+## Table of Contents
 
-### Prerequisites
+- [Features](#features)
+- [Supported Browsers](#supported-browsers)
+- [Installation](#installation)
+- [Usage](#usage)
+  - [Getting Started](#getting-started)
+  - [Main Tab](#main-tab)
+  - [Advanced Tab](#advanced-tab)
+  - [Settings Tab](#settings-tab)
+  - [System Tab](#system-tab)
+  - [Logs Tab](#logs-tab)
+  - [About Tab](#about-tab)
+- [Screenshots](#screenshots)
+- [Releases](#releases)
+- [Support](#support)
+- [Contributing](#contributing)
+- [Security](#security)
+- [License](#license)
+- [Dependencies](#dependencies)
 
-- **Python 3.8+**: Ensure Python is installed.
-- **Pip**: Python package manager (typically included with Python).
-- **Chrome Browser**: Required for Selenium WebDriver.
+## Features
 
-### Steps
+- **Multi-Instance Tab Management**: Run multiple [Google Chrome](https://www.google.com/chrome/) instances simultaneously, each managing its own set of tabs.
+- **Customizable Browser Options**: Support for headless mode, incognito, proxy settings, custom user agents, and additional Chrome arguments.
+- **Multilingual Interface**: Supports English, Japanese, Korean, Chinese, and Filipino with dynamic language switching.
+- **Themeable Interface**: Choose from six visually appealing themes (Dark Navy, Light Blue, Dark Green, Light Green, Soft Pink, Soft Lavender).
+- **Real-Time System Monitoring**: Track CPU, memory, and disk usage with live updates using [psutil](https://pypi.org/project/psutil/).
+- **Detailed Logging**: Color-coded logs with filtering (INFO, WARNING, ERROR) and export capabilities.
+- **Advanced Configuration**: Fine-tune browser behavior with proxy settings, user agent customization, and Chrome command-line arguments.
+- **Automatic Updates**: Check for new versions on startup with optional notifications using [requests](https://pypi.org/project/requests/).
+- **Cross-Platform GUI**: Built with [PyQt6](https://pypi.org/project/PyQt6/) for a modern, intuitive interface compatible with Windows, macOS, and Linux.
+- **Process Management**: Robust handling of Chrome and ChromeDriver processes to prevent resource leaks.
+- **Error Handling**: Comprehensive error detection and logging for reliable operation.
 
-1. **Clone the Repository**:
+## Supported Browsers
+
+[Advanced Tab Manager Pro](https://github.com/VoxDroid/Advanced-Tab-Manager) currently supports:
+
+- **[Google Chrome](https://www.google.com/chrome/)**: Managed via [Selenium WebDriver](https://www.selenium.dev/documentation/webdriver/) with automatic ChromeDriver installation using [webdriver-manager](https://pypi.org/project/webdriver-manager/).
+
+*Note*: Support for additional browsers (e.g., Firefox, Edge) is planned for future releases.
+
+## Installation
+
+[Advanced Tab Manager Pro](https://github.com/VoxDroid/Advanced-Tab-Manager) is packaged as a Python application, making it easy to run or distribute across platforms. You can either build from source or use pre-compiled binaries where available.
+
+### Building from Source (All Platforms)
+
+1. Ensure you have **Python 3.8+** installed on your system (Windows, macOS, Linux).
+
+2. Clone this repository:
+
    ```bash
    git clone https://github.com/VoxDroid/Advanced-Tab-Manager.git
    cd Advanced-Tab-Manager
    ```
 
-2. **Install Dependencies**:
+3. Install dependencies:
+
    ```bash
    pip install -r requirements.txt
    ```
-   *Note*: If `requirements.txt` isn’t present, manually install:
+
+   If [requirements.txt](https://github.com/VoxDroid/Advanced-Tab-Manager/blob/main/requirements.txt) is not present, manually install:
+
    ```bash
-   pip install PyQt6 selenium psutil qtawesome webdriver-manager requests
+   pip install PyQt6 selenium psutil qtawesome webdriver-manager requests packaging
    ```
 
-3. **Run the Application**:
+4. Run the application:
+
    ```bash
    python app.py
    ```
-   - This launches the GUI and automatically installs the ChromeDriver via `webdriver-manager`.
 
----
+   This will launch the GUI using [app.py](https://github.com/VoxDroid/Advanced-Tab-Manager/blob/main/src/advancedtabmanager/app.py) and automatically install the appropriate ChromeDriver version via [webdriver-manager](https://pypi.org/project/webdriver-manager/).
 
-## 📋 Usage
+### Pre-Compiled Binaries
 
-### Main Interface
+- **Windows**: Download the latest `.exe` (portable) or `.msi` (installer) tagged with `[W]` for Windows, from the [Releases](https://github.com/VoxDroid/Advanced-Tab-Manager/releases) page. Run the MSI installer or use the portable version for no-setup runs.
+- **macOS**: Download the latest universal `.dmg` (x86_64 and Apple Silicon) tagged with `[M]` for macOS, from the [Releases](https://github.com/VoxDroid/Advanced-Tab-Manager/releases) page. Open the DMG, drag the app to Applications, and launch it.
+- **Linux**: Download the latest `.rpm` (for Fedora/Red Hat), `.deb` (for Debian/Ubuntu), or `.pkg.tar.zst` (for Arch/Pacman) tagged with `[L]` for Linux, from the [Releases](https://github.com/VoxDroid/Advanced-Tab-Manager/releases) page. Run the installer and launch the app.
 
-| Tab          | Description                                      |
-|--------------|--------------------------------------------------|
-| **Main**     | Configure URL, instances, and start/stop tasks.  |
-| **Advanced** | Customize Chrome options and proxy settings.    |
-| **Settings** | Adjust theme, language, and font size.          |
-| **System**   | View real-time system stats.                    |
-| **Logs**     | Monitor detailed logs with filters.             |
-| **About**    | Application details and license info.           |
+*Note*: Pre-compiled binaries require [Google Chrome](https://www.google.com/chrome/) to be installed on the system.
 
-### Starting a Tab Task
+## Usage
 
-1. **Main Tab**:
-   - Enter a URL (e.g., `https://google.com`).
-   - Set iterations (0 for infinite), interval (seconds), and number of instances.
-   - Click "Start" to begin.
+Upon launching [Advanced Tab Manager Pro](https://github.com/VoxDroid/Advanced-Tab-Manager), you’ll see the main interface featuring six tabs: **Main**, **Advanced**, **Settings**, **System**, **Logs**, and **About**. The in-app [About Tab](#about-tab) contains additional usage information.
 
-2. **Advanced Tab** (Optional):
-   - Enable headless mode, incognito, or proxy settings.
+### Getting Started
 
-3. **Monitor Progress**:
-   - Check status, cycles, and logs in real-time.
+- Launch the application using `python [app.py](https://github.com/VoxDroid/Advanced-Tab-Manager/blob/main/src/advancedtabmanager/app.py)` or a pre-compiled binary.
+- Explore the [Main Tab](#main-tab) to configure and start tab management tasks.
+- Customize browser options in the [Advanced Tab](#advanced-tab) and application settings in the [Settings Tab](#settings-tab).
+- Monitor system resources in the [System Tab](#system-tab) and view detailed logs in the [Logs Tab](#logs-tab).
+- Refer to the [About Tab](#about-tab) for application details and licensing information.
 
----
+### Main Tab
 
-## 🎨 Customization
+- **Purpose**: Configure and control tab management tasks.
+- **How to Use**:
+  1. Enter a valid URL (e.g., `https://google.com`) in the URL field.
+  2. Set the number of iterations (0 for infinite) and interval (seconds) between tab openings.
+  3. Specify the number of browser instances (1–10).
+  4. Click "Start" to begin opening tabs, "Stop" to halt operations, or "Reset" to clear fields.
+  5. Monitor the status, progress bar, and cycle count for real-time updates.
 
-### Themes
+### Advanced Tab
 
-Select from six visually appealing themes:
-- **Dark Navy** (Default)
-- **Light Blue**
-- **Dark Green**
-- **Light Green**
-- **Soft Pink**
-- **Soft Lavender**
+- **Purpose**: Customize [Google Chrome](https://www.google.com/chrome/) browser options.
+- **How to Use**:
+  1. Enable options like headless mode, incognito, or disable GPU/extensions.
+  2. Set a custom user agent or enable proxy settings with an IP:PORT address.
+  3. Add additional Chrome command-line arguments (one per line).
+  4. These settings apply to all instances when starting a task.
 
-Adjust in the **Settings Tab** under "Theme".
+### Settings Tab
 
-### Languages
+- **Purpose**: Customize the application’s appearance and behavior.
+- **How to Use**:
+  1. Select a theme (e.g., Dark Navy, Soft Pink) or adjust font size (8–24 pt).
+  2. Choose a language (English, Japanese, Korean, Chinese, Filipino).
+  3. Enable auto-start or lock window size options.
+  4. Save or load settings, export logs, or clear the log viewer.
 
-Supported languages:
-- English
-- Japanese (日本語)
-- Korean (한국어)
-- Chinese (中文)
-- Filipino (Tagalog)
+### System Tab
 
-Set in the **Settings Tab** under "Language".
+- **Purpose**: Monitor system resources.
+- **How to Use**:
+  1. View real-time CPU, memory, and disk usage percentages using [psutil](https://pypi.org/project/psutil/).
+  2. Check detailed system information (OS, processor, RAM, etc.).
+  3. Use this tab to ensure your system can handle multiple browser instances.
 
----
+### Logs Tab
 
-## 🛠️ Technical Details
+- **Purpose**: View and manage application logs.
+- **How to Use**:
+  1. Monitor color-coded logs (INFO, WARNING, ERROR) with timestamps.
+  2. Filter logs by level (e.g., show only errors) using checkboxes.
+  3. Export logs to a text file or clear the log viewer.
 
-### Dependencies
+### About Tab
 
-| Package            | Purpose                     |
-|--------------------|-----------------------------|
-| PyQt6             | GUI framework              |
-| Selenium          | Browser automation         |
-| psutil            | System monitoring          |
-| qtawesome         | Icon library               |
-| webdriver-manager | ChromeDriver management    |
-| requests          | HTTP requests (unused)     |
+- **Purpose**: Access application and licensing information.
+- **How to Use**:
+  1. View details about the application, including version and developer info.
+  2. Check the [MIT License](https://github.com/VoxDroid/Advanced-Tab-Manager/blob/main/LICENSE) details via a clickable link.
+  3. Find links to the [GitHub repository](https://github.com/VoxDroid/Advanced-Tab-Manager) and [Support](#support) channels.
 
-### File Structure
+## Screenshots
 
-```
-Advanced-Tab-Manager/
-├── app.py                # Main application script
-└── README.md              # Documentation
-```
+Here are previews of the main tabs in [Advanced Tab Manager Pro](https://github.com/VoxDroid/Advanced-Tab-Manager):
 
-*Note*: Additional files (e.g., font files) may be added in future updates.
+<table style="min-width: 50px">
+<colgroup><col style="min-width: 25px"><col style="min-width: 25px"></colgroup>
+<tbody>
+<tr class="border-border">
+<td colspan="1" rowspan="1"><p dir="ltr"><br><strong>Main Tab</strong><br><img src="assets/screenshots/atm_MAIN.png" alt="Main Tab"></p></td>
+<td colspan="1" rowspan="1"><p dir="ltr"><br><strong>Advanced Tab</strong><br><img src="assets/screenshots/atm_ADVANCED.png" alt="Advanced Tab"></p></td>
+</tr>
+<tr class="border-border">
+<td colspan="1" rowspan="1"><p dir="ltr"><br><strong>Settings Tab</strong><br><img src="assets/screenshots/atm_SETTINGS.png" alt="Settings Tab"></p></td>
+<td colspan="1" rowspan="1"><p dir="ltr"><br><strong>System Tab</strong><br><img src="assets/screenshots/atm_SYSTEM.png" alt="System Tab"></p></td>
+</tr>
+<tr class="border-border">
+<td colspan="1" rowspan="1"><p dir="ltr"><br><strong>Logs Tab</strong><br><img src="assets/screenshots/atm_LOGS.png" alt="Logs Tab"></p></td>
+<td colspan="1" rowspan="1"><p dir="ltr"><br><strong>About Tab (Coming Soon)</strong><br><img src="assets/img/ATM.png" alt="About Tab"></p></td>
+</tr>
+</tbody>
+</table>
 
----
+*Note*: Screenshots assume the presence of `assets/screenshots/` directory in the repository. Ensure these files exist or update paths in [README.md](https://github.com/VoxDroid/Advanced-Tab-Manager/blob/main/README.md) accordingly.
 
-## 🌟 Contributing
+## Releases
 
-Contributions are encouraged! Here’s how to contribute:
+- **Windows**: Pre-compiled `.exe` (portable) or `.msi` (installer) tagged with `[W]` for Windows, available in the [Releases](https://github.com/VoxDroid/Advanced-Tab-Manager/releases) section.
+- **macOS**: Pre-compiled universal `.dmg` (x86_64 and Apple Silicon) tagged with `[M]` for macOS, available in the [Releases](https://github.com/VoxDroid/Advanced-Tab-Manager/releases) section.
+- **Linux**: Pre-compiled `.rpm` (for Fedora/Red Hat), `.deb` (for Debian/Ubuntu), or `.pkg.tar.zst` (for Arch/Pacman) tagged with `[L]` for Linux, available in the [Releases](https://github.com/VoxDroid/Advanced-Tab-Manager/releases) section.
+- Check [release notes](https://github.com/VoxDroid/Advanced-Tab-Manager/releases) for details on new features, bug fixes, and version updates.
+- The Python source ([app.py](https://github.com/VoxDroid/Advanced-Tab-Manager/blob/main/src/advancedtabmanager/app.py)) remains the primary method, supporting all platforms with proper setup.
 
-1. **Fork the Repository**: Click "Fork" on GitHub.
-2. **Clone Your Fork**:
+## Support
+
+For ways to get help, report issues, or support the project’s development, please see the following:
+
+- **Issues**: Report bugs or suggest features on the [Issues](https://github.com/VoxDroid/Advanced-Tab-Manager/issues) page.
+- **Discussions**: Join community discussions on the [Discussions](https://github.com/VoxDroid/Advanced-Tab-Manager/discussions) page.
+- **Email**: Contact the developer at [izeno.contact@gmail.com](mailto:izeno.contact@gmail.com) for private inquiries.
+- **Ko-fi**: Support the project financially at [ko-fi.com/izeno](https://ko-fi.com/izeno).
+
+## Contributing
+
+[Advanced Tab Manager Pro](https://github.com/VoxDroid/Advanced-Tab-Manager) is open-source, and contributions are encouraged! Please read our [Contributing Guidelines](https://github.com/VoxDroid/Advanced-Tab-Manager/blob/main/CONTRIBUTING.md), [Code of Conduct](https://github.com/VoxDroid/Advanced-Tab-Manager/blob/main/CODE_OF_CONDUCT.md), and [Security Policy](https://github.com/VoxDroid/Advanced-Tab-Manager/blob/main/SECURITY.md) before submitting issues or pull requests. Use the appropriate issue templates for reporting bugs, suggesting features, or other contributions, and the Pull Request template for code submissions.
+
+1. Fork the repository at [VoxDroid/Advanced-Tab-Manager](https://github.com/VoxDroid/Advanced-Tab-Manager).
+
+2. Clone your fork:
+
    ```bash
    git clone https://github.com/VoxDroid/Advanced-Tab-Manager.git
    ```
-3. **Create a Branch**:
+
+3. Create a branch:
+
    ```bash
    git checkout -b feature/your-feature
    ```
-4. **Make Changes**: Add features or fix bugs.
-5. **Commit and Push**:
+
+4. Make changes and commit:
+
    ```bash
    git add .
    git commit -m "Describe your changes"
+   ```
+
+5. Push to your fork:
+
+   ```bash
    git push origin feature/your-feature
    ```
-6. **Submit a Pull Request**: Open a PR on GitHub.
 
-### Guidelines
+6. Open a Pull Request on [GitHub](https://github.com/VoxDroid/Advanced-Tab-Manager).
 
-- Adhere to PEP 8 for Python code.
-- Test locally before submitting.
-- Update this README if new features are added.
+## Security
 
----
+If you discover a security vulnerability, please follow our [Security Policy](https://github.com/VoxDroid/Advanced-Tab-Manager/blob/main/SECURITY.md) by emailing [izeno.contact@gmail.com](mailto:izeno.contact@gmail.com) or using the Security Report issue template on the [Issues](https://github.com/VoxDroid/Advanced-Tab-Manager/issues) page for non-sensitive issues.
 
-## 🐛 Issues and Support
+## License
 
-Encountered a problem? Need help?
+This project is licensed under the [MIT License](https://github.com/VoxDroid/Advanced-Tab-Manager/blob/main/LICENSE). See the [LICENSE](https://github.com/VoxDroid/Advanced-Tab-Manager/blob/main/LICENSE) file for details.
 
-- **Open an Issue**: Visit [Issues](https://github.com/VoxDroid/Advanced-Tab-Manager/issues).
-- **Contact**: Use GitHub Discussions or reach out directly (if contact info is provided).
+## Dependencies
 
----
+To build from source, install the following Python packages:
 
-## 📜 License
+- [PyQt6](https://pypi.org/project/PyQt6/) (for the GUI)
+- [selenium](https://pypi.org/project/selenium/) (for browser automation)
+- [psutil](https://pypi.org/project/psutil/) (for system monitoring)
+- [qtawesome](https://pypi.org/project/qtawesome/) (for icons)
+- [webdriver-manager](https://pypi.org/project/webdriver-manager/) (for ChromeDriver management)
+- [requests](https://pypi.org/project/requests/) (for HTTP requests)
+- [packaging](https://pypi.org/project/packaging/) (for version parsing)
 
-This project is licensed under the MIT License. See the [LICENSE](https://github.com/VoxDroid/Advanced-Tab-Manager?tab=MIT-1-ov-file) file for details.
+Create a [requirements.txt](https://github.com/VoxDroid/Advanced-Tab-Manager/blob/main/requirements.txt) file with these dependencies and run:
 
----
-
-## 🙌 Acknowledgments
-
-- **PyQt6 Team**: For a robust GUI framework.
-- **Selenium Project**: For powerful browser automation.
-- **qtawesome**: For FontAwesome icon integration.
-- **webdriver-manager**: For seamless ChromeDriver management.
+```bash
+pip install -r requirements.txt
+```
 
 ---
 
-## 📈 Roadmap
-
-- [ ] Add drag-and-drop URL support.
-- [ ] Implement system tray functionality.
-- [ ] Enhance proxy settings with authentication.
-- [ ] Add more language translations.
-- [ ] Support additional browsers (e.g., Firefox).
-
----
-
-## 📊 Stats
-
-![GitHub commit activity](https://img.shields.io/github/commit-activity/m/VoxDroid/Advanced-Tab-Manager?style=flat-square)
-![GitHub last commit](https://img.shields.io/github/last-commit/VoxDroid/Advanced-Tab-Manager?style=flat-square)
-![Contributors](https://img.shields.io/github/contributors/VoxDroid/Advanced-Tab-Manager?style=flat-square)
-
----
-
-## 💡 Tips and Tricks
-
-- **Infinite Loops**: Set "Iterations" to 0 for continuous tab cycling.
-- **Resource Management**: Use fewer instances on low-spec systems.
-- **Headless Mode**: Enable for faster, UI-free operation.
-- **Log Filtering**: Toggle log levels in the Logs tab for focused debugging.
-
----
-
-## 📸 Screenshots
-
-### Main Tab
-![Main Tab](assets/screenshots/atm_MAIN.png)
-
-### Advanced Tab
-![Advanced tab](assets/screenshots/atm_ADVANCED.png)
-
-### Settings Tab
-![Settings Tab](assets/screenshots/atm_SETTINGS.png)
-
-### System Tab
-![System Tab](assets/screenshots/atm_SYSTEM.png)
-
-### Logs Tab
-![Logs Tab](assets/screenshots/atm_LOGS.png)
-
----
-
-## 🔗 Links
-
-- **Repository**: [github.com/VoxDroid/Advanced-Tab-Manager](https://github.com/VoxDroid/Advanced-Tab-Manager)
-- **Issues**: [github.com/VoxDroid/Advanced-Tab-Manager/issues](https://github.com/VoxDroid/Advanced-Tab-Manager/issues)
-- **Author**: [VoxDroid](https://github.com/VoxDroid)
-
----
-
-## 🎉 Final Words
-
-Thank you for exploring **Advanced Tab Manager Pro**! This tool aims to make browser automation accessible and efficient. If it helps your workflow, please star the repository and share your feedback. Happy automating! 🚀
+**Developed by [VoxDroid](https://github.com/VoxDroid)**  
+[GitHub](https://github.com/VoxDroid) | [Ko-fi](https://ko-fi.com/izeno)
 
 ---
