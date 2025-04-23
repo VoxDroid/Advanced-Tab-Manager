@@ -64,3 +64,4 @@ logs/
 
 # Advanced Tab Manager
 /.app
+/.venv
