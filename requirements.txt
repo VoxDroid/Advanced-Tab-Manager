@@ -3,3 +3,4 @@ qtawesome
 selenium
 webdriver-manager
 psutil
+briefcase
