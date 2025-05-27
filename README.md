@@ -123,13 +123,13 @@ Welcome to **[Advanced Tab Manager Pro](https://github.com/VoxDroid/Advanced-Tab
 3. Install dependencies:
 
    ```bash
-   pip install -r requirements.txt
+   python -m pip install -r requirements.txt
    ```
 
    If [requirements.txt](https://github.com/VoxDroid/Advanced-Tab-Manager/blob/main/requirements.txt) is not present, manually install:
 
    ```bash
-   pip install PyQt6 selenium psutil qtawesome webdriver-manager requests packaging
+   python -m pip install PyQt6 selenium psutil qtawesome webdriver-manager requests packaging briefcase
    ```
 
 4. Run the application:
