@@ -1,4 +1,4 @@
-<h1 align="center">Text Extractor</h1>
+<h1 align="center">Advanced Tab Manager</h1>
 
 <div align="center">
   <img src="https://raw.githubusercontent.com/VoxDroid/Advanced-Tab-Manager/refs/heads/main/assets/img/ATM.png" alt="Advanced Tab Manager" width="600"/>
