@@ -9,8 +9,8 @@ from webdriver_manager.chrome import ChromeDriverManager
 from webdriver_manager.firefox import GeckoDriverManager
 from selenium.webdriver.chrome.service import Service as ChromeService
 from selenium.webdriver.firefox.service import Service as FirefoxService
-from selenium.webdriver.chrome.options import Options as ChromeOptions
-from selenium.webdriver.firefox.options import Options as FirefoxOptions
+from selenium.webdriver.support.ui import WebDriverWait
+from selenium.webdriver.support import expected_conditions as EC
 
 class BrowserThread(QThread):
     update_status = pyqtSignal(str)
@@ -175,6 +175,21 @@ class BrowserThread(QThread):
                     )
                 self.driver = driver
             except WebDriverException as e:
+                error_msg = str(e).lower()
+                # Provide more specific error messages for common issues
+                if "chrome instance exited" in error_msg:
+                    self.log_message.emit(f"Chrome browser instance exited immediately. This usually indicates:", "ERROR")
+                    self.log_message.emit(f"  - Chrome binary not found at: {getattr(self.browser_options, 'binary_location', 'Not set')}", "ERROR")
+                    self.log_message.emit(f"  - Chrome version incompatible with ChromeDriver", "ERROR")
+                    self.log_message.emit(f"  - Conflicting Chrome command line arguments", "ERROR")
+                    self.log_message.emit(f"  - Chrome already running with conflicting profile", "ERROR")
+                elif "session not created" in error_msg:
+                    self.log_message.emit(f"WebDriver session creation failed. Check browser version compatibility.", "ERROR")
+                elif "executable needs to be in path" in error_msg:
+                    self.log_message.emit(f"Browser executable not found in PATH or specified location.", "ERROR")
+                else:
+                    self.log_message.emit(f"WebDriver initialization error: {str(e)}", "ERROR")
+                
                 self.error_occurred.emit(f"Failed to initialize WebDriver for instance {self.instance_id}: {str(e)}")
                 self.log_message.emit(f"Failed to initialize WebDriver for instance {self.instance_id}: {str(e)}", "ERROR")
                 return
@@ -269,6 +284,19 @@ class BrowserThread(QThread):
                         new_tab_handle = handles[-1]
                         self.driver.switch_to.window(new_tab_handle)
 
+                        # Wait for the page to fully load
+                        try:
+                            WebDriverWait(self.driver, 10).until(
+                                lambda driver: driver.execute_script("return document.readyState") == "complete"
+                            )
+                        except Exception as e:
+                            error_msg = str(e).lower()
+                            # Suppress warnings for discarded browsing contexts and invalid sessions (tab/browser closed manually)
+                            suppress_keywords = ['browsing context has been discarded', 'session does not exist', 'invalid session', 'marionette', 'no such window']
+                            should_suppress = any(keyword in error_msg for keyword in suppress_keywords)
+                            if not should_suppress and not self.stop_requested:
+                                self.log_message.emit(f"Timeout waiting for page to load in instance {self.instance_id}: {str(e)}", "WARNING")
+
                         if new_tab_handle != first_tab_handle:
                             # Double-check driver is still valid before closing tab
                             if self.is_driver_valid():
@@ -301,8 +329,12 @@ class BrowserThread(QThread):
                         self.log_message.emit(f"Instance {self.instance_id}, Cycle {iteration}: Opened new tab, total tabs: {len(handles)}", "INFO")
                     except WebDriverException as e:
                         consecutive_errors += 1
-                        self.error_occurred.emit(f"Browser error for instance {self.instance_id}: {str(e)}")
-                        self.log_message.emit(f"Browser error occurred for instance {self.instance_id}: {str(e)}", "ERROR")
+                        # Suppress marionette errors (Firefox connection lost) and errors during shutdown
+                        error_msg = str(e).lower()
+                        should_suppress = self.stop_requested or 'marionette' in error_msg or 'connection' in error_msg
+                        if not should_suppress:
+                            self.error_occurred.emit(f"Browser error for instance {self.instance_id}: {str(e)}")
+                            self.log_message.emit(f"Browser error occurred for instance {self.instance_id}: {str(e)}", "ERROR")
 
                         # Performance optimization: if too many consecutive errors, add delay
                         if consecutive_errors > 3:
@@ -310,8 +342,9 @@ class BrowserThread(QThread):
                         break
                     except Exception as e:
                         consecutive_errors += 1
-                        self.error_occurred.emit(f"Unexpected error during tab operation for instance {self.instance_id}: {str(e)}")
-                        self.log_message.emit(f"Unexpected error during tab operation for instance {self.instance_id}: {str(e)}", "ERROR")
+                        if not self.stop_requested:
+                            self.error_occurred.emit(f"Unexpected error during tab operation for instance {self.instance_id}: {str(e)}")
+                            self.log_message.emit(f"Unexpected error during tab operation for instance {self.instance_id}: {str(e)}", "ERROR")
 
                         # Performance optimization: if too many consecutive errors, add delay
                         if consecutive_errors > 3:
@@ -350,7 +383,9 @@ class BrowserThread(QThread):
                         else:
                             self.log_message.emit(f"Driver session is invalid for instance {self.instance_id}, skipping graceful quit", "WARNING")
                     except Exception as e:
-                        self.log_message.emit(f"Failed to quit driver gracefully for instance {self.instance_id}: {str(e)}", "WARNING")
+                        # Suppress cleanup errors during shutdown or for expected failures
+                        if not self.stop_requested and 'NoneType' not in str(e):
+                            self.log_message.emit(f"Failed to quit driver gracefully for instance {self.instance_id}: {str(e)}", "WARNING")
                     finally:
                         self.driver = None
             except Exception as e:

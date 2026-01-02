@@ -41,6 +41,53 @@ urllib3.disable_warnings(urllib3.exceptions.ConnectionError)
 retry_strategy = Retry(total=0, connect=None, read=None, redirect=None, status=None)
 http = urllib3.PoolManager(retries=retry_strategy)
 
+class ProxyTestThread(QThread):
+    test_finished = pyqtSignal(str, str)  # message, type ('success', 'warning', 'error')
+    
+    def __init__(self, proxy_address):
+        super().__init__()
+        self.proxy_address = proxy_address
+    
+    def run(self):
+        try:
+            import requests
+            from requests.exceptions import RequestException, Timeout
+            
+            proxies = {
+                'http': f'http://{self.proxy_address}',
+                'https': f'http://{self.proxy_address}'
+            }
+            
+            # Try to get IP info
+            response = requests.get('http://httpbin.org/ip', proxies=proxies, timeout=10)
+            response.raise_for_status()
+            
+            data = response.json()
+            proxy_ip = data.get('origin', 'Unknown')
+            
+            # Also test without proxy to compare
+            try:
+                direct_response = requests.get('http://httpbin.org/ip', timeout=5)
+                direct_data = direct_response.json()
+                direct_ip = direct_data.get('origin', 'Unknown')
+                
+                if proxy_ip != direct_ip:
+                    message = f"Proxy working!\n\nProxy IP: {proxy_ip}\nDirect IP: {direct_ip}\n\nThe proxy is successfully routing your traffic."
+                    self.test_finished.emit(message, 'success')
+                else:
+                    message = f"Proxy may not be working properly.\n\nProxy IP: {proxy_ip}\nDirect IP: {direct_ip}\n\nThe IP is the same, which might indicate the proxy isn't active."
+                    self.test_finished.emit(message, 'warning')
+            except:
+                message = f"Proxy connection successful!\n\nProxy IP: {proxy_ip}\n\n(Couldn't test direct connection for comparison)"
+                self.test_finished.emit(message, 'success')
+                
+        except Timeout:
+            self.test_finished.emit("Proxy test timed out. The proxy may be slow or unreachable.", 'warning')
+        except RequestException as e:
+            self.test_finished.emit(f"Proxy test failed: {str(e)}\n\nThe proxy may not be working or accessible.", 'warning')
+        except Exception as e:
+            self.test_finished.emit(f"Unexpected error during proxy test: {str(e)}", 'warning')
+
 class MainWindow(QMainWindow):
     def __init__(self):
         super().__init__()
@@ -70,6 +117,7 @@ class MainWindow(QMainWindow):
 
         self.setup_status_bar()
         self.threads = []
+        self.proxy_test_thread = None
         self.load_settings()
 
         logging.basicConfig(level=logging.INFO)
@@ -755,6 +803,7 @@ class MainWindow(QMainWindow):
         self.url_text_label = QLabel("URL:")
         self.url_input = QLineEdit("https://google.com/")
         self.url_input.setToolTip("Enter the URL to open in tabs")
+        self.url_input.setAttribute(Qt.WidgetAttribute.WA_AlwaysShowToolTips, True)
         url_layout.addWidget(url_icon_label)
         url_layout.addWidget(self.url_text_label)
         url_layout.addWidget(self.url_input)
@@ -771,6 +820,7 @@ class MainWindow(QMainWindow):
         self.iterations_input = QSpinBox()
         self.iterations_input.setRange(0, 1000000)
         self.iterations_input.setToolTip("Set to 0 for infinite iterations")
+        self.iterations_input.setAttribute(Qt.WidgetAttribute.WA_AlwaysShowToolTips, True)
         iterations_layout.addWidget(iterations_icon_label)
         iterations_layout.addWidget(self.iterations_text_label)
         iterations_layout.addWidget(self.iterations_input)
@@ -788,6 +838,7 @@ class MainWindow(QMainWindow):
         self.interval_input.setRange(1, 3600)
         self.interval_input.setValue(1)
         self.interval_input.setToolTip("Set the delay between tab openings in seconds")
+        self.interval_input.setAttribute(Qt.WidgetAttribute.WA_AlwaysShowToolTips, True)
         interval_layout.addWidget(interval_icon_label)
         interval_layout.addWidget(self.interval_text_label)
         interval_layout.addWidget(self.interval_input)
@@ -805,6 +856,7 @@ class MainWindow(QMainWindow):
         self.instances_input.setRange(1, 10)
         self.instances_input.setValue(1)
         self.instances_input.setToolTip("Set the number of browser instances to run simultaneously")
+        self.instances_input.setAttribute(Qt.WidgetAttribute.WA_AlwaysShowToolTips, True)
         instances_layout.addWidget(instances_icon_label)
         instances_layout.addWidget(self.instances_text_label)
         instances_layout.addWidget(self.instances_input)
@@ -897,42 +949,76 @@ class MainWindow(QMainWindow):
         self.browser_combo = QComboBox()
         self.browser_combo.addItems(["Chrome", "Firefox"])
         self.browser_combo.setToolTip("Select the browser to use for automation")
+        self.browser_combo.setAttribute(Qt.WidgetAttribute.WA_AlwaysShowToolTips, True)
         browser_layout.addWidget(browser_icon_label)
         browser_layout.addWidget(self.browser_text_label)
         browser_layout.addWidget(self.browser_combo)
         self.browser_group.setLayout(browser_layout)
         scroll_layout.addWidget(self.browser_group)
 
-        # Chrome Options
-        self.chrome_options_group = QGroupBox("Chrome Options")
-        chrome_options_layout = QVBoxLayout()
+        # Browser Options
+        self.browser_options_group = QGroupBox("Browser Options")
+        browser_options_layout = QVBoxLayout()
+        
+        # Basic options
         self.headless_checkbox = QCheckBox()
         self.headless_checkbox.setText("Headless mode")
         self.headless_checkbox.setIcon(qta.icon('fa5s.eye-slash', color='#e6f1ff'))
-        self.headless_checkbox.setToolTip("Run Chrome in headless mode (no UI)")
-        self.disable_gpu_checkbox = QCheckBox()
-        self.disable_gpu_checkbox.setText("Disable GPU")
-        self.disable_gpu_checkbox.setIcon(qta.icon('fa5s.desktop', color='#e6f1ff'))
-        self.disable_gpu_checkbox.setToolTip("Disable GPU hardware acceleration")
+        self.headless_checkbox.setToolTip("Run browser in headless mode (no UI) - uses new headless implementation")
+        
         self.incognito_checkbox = QCheckBox()
-        self.incognito_checkbox.setText("Incognito mode")
+        self.incognito_checkbox.setText("Private/Incognito mode")
         self.incognito_checkbox.setIcon(qta.icon('fa5s.user-secret', color='#e6f1ff'))
-        self.incognito_checkbox.setToolTip("Run Chrome in incognito mode")
-        self.disable_extensions_checkbox = QCheckBox()
-        self.disable_extensions_checkbox.setText("Disable extensions")
-        self.disable_extensions_checkbox.setIcon(qta.icon('fa5s.plug', color='#e6f1ff'))
-        self.disable_extensions_checkbox.setToolTip("Disable all Chrome extensions")
+        self.incognito_checkbox.setToolTip("Run browser in private/incognito mode")
+        
         self.start_maximized_checkbox = QCheckBox()
         self.start_maximized_checkbox.setText("Start maximized")
         self.start_maximized_checkbox.setIcon(qta.icon('fa5s.expand', color='#e6f1ff'))
-        self.start_maximized_checkbox.setToolTip("Start Chrome maximized")
-        chrome_options_layout.addWidget(self.headless_checkbox)
-        chrome_options_layout.addWidget(self.disable_gpu_checkbox)
-        chrome_options_layout.addWidget(self.incognito_checkbox)
-        chrome_options_layout.addWidget(self.disable_extensions_checkbox)
-        chrome_options_layout.addWidget(self.start_maximized_checkbox)
-        self.chrome_options_group.setLayout(chrome_options_layout)
-        scroll_layout.addWidget(self.chrome_options_group)
+        self.start_maximized_checkbox.setToolTip("Start browser maximized")
+        
+        # Advanced options
+        self.disable_gpu_checkbox = QCheckBox()
+        self.disable_gpu_checkbox.setText("Disable GPU acceleration")
+        self.disable_gpu_checkbox.setIcon(qta.icon('fa5s.desktop', color='#e6f1ff'))
+        self.disable_gpu_checkbox.setToolTip("Disable GPU hardware acceleration")
+        
+        self.disable_extensions_checkbox = QCheckBox()
+        self.disable_extensions_checkbox.setText("Disable extensions")
+        self.disable_extensions_checkbox.setIcon(qta.icon('fa5s.plug', color='#e6f1ff'))
+        self.disable_extensions_checkbox.setToolTip("Disable all browser extensions")
+        
+        self.disable_notifications_checkbox = QCheckBox()
+        self.disable_notifications_checkbox.setText("Disable notifications")
+        self.disable_notifications_checkbox.setIcon(qta.icon('fa5s.bell-slash', color='#e6f1ff'))
+        self.disable_notifications_checkbox.setToolTip("Disable browser notifications")
+        
+        self.disable_web_security_checkbox = QCheckBox()
+        self.disable_web_security_checkbox.setText("Disable web security")
+        self.disable_web_security_checkbox.setIcon(qta.icon('fa5s.shield-alt', color='#e6f1ff'))
+        self.disable_web_security_checkbox.setToolTip("Disable web security features (Chrome only)")
+        
+        self.no_sandbox_checkbox = QCheckBox()
+        self.no_sandbox_checkbox.setText("No sandbox")
+        self.no_sandbox_checkbox.setIcon(qta.icon('fa5s.box-open', color='#e6f1ff'))
+        self.no_sandbox_checkbox.setToolTip("Disable sandbox (Chrome only)")
+        
+        self.disable_dev_shm_checkbox = QCheckBox()
+        self.disable_dev_shm_checkbox.setText("Disable /dev/shm usage")
+        self.disable_dev_shm_checkbox.setIcon(qta.icon('fa5s.memory', color='#e6f1ff'))
+        self.disable_dev_shm_checkbox.setToolTip("Disable /dev/shm usage (Chrome only)")
+        
+        browser_options_layout.addWidget(self.headless_checkbox)
+        browser_options_layout.addWidget(self.incognito_checkbox)
+        browser_options_layout.addWidget(self.start_maximized_checkbox)
+        browser_options_layout.addWidget(self.disable_gpu_checkbox)
+        browser_options_layout.addWidget(self.disable_extensions_checkbox)
+        browser_options_layout.addWidget(self.disable_notifications_checkbox)
+        browser_options_layout.addWidget(self.disable_web_security_checkbox)
+        browser_options_layout.addWidget(self.no_sandbox_checkbox)
+        browser_options_layout.addWidget(self.disable_dev_shm_checkbox)
+        
+        self.browser_options_group.setLayout(browser_options_layout)
+        scroll_layout.addWidget(self.browser_options_group)
 
         # User Agent
         self.user_agent_group = QGroupBox("User Agent")
@@ -943,6 +1029,7 @@ class MainWindow(QMainWindow):
         self.user_agent_text_label = QLabel("Enter custom user agent (optional):")
         self.user_agent_input = QLineEdit()
         self.user_agent_input.setToolTip("Enter a custom user agent for the browser (optional)")
+        self.user_agent_input.setAttribute(Qt.WidgetAttribute.WA_AlwaysShowToolTips, True)
         user_agent_layout.addWidget(user_agent_icon_label)
         user_agent_layout.addWidget(self.user_agent_text_label)
         user_agent_layout.addWidget(self.user_agent_input)
@@ -963,29 +1050,27 @@ class MainWindow(QMainWindow):
         self.proxy_text_label = QLabel("Proxy address (e.g., 127.0.0.1:8080):")
         self.proxy_address_input = QLineEdit()
         self.proxy_address_input.setToolTip("Enter proxy address in the format IP:PORT (e.g., 127.0.0.1:8080)")
+        self.proxy_address_input.setAttribute(Qt.WidgetAttribute.WA_AlwaysShowToolTips, True)
         proxy_input_layout.addWidget(proxy_icon_label)
         proxy_input_layout.addWidget(self.proxy_text_label)
         proxy_input_layout.addWidget(self.proxy_address_input)
+        
+        # Test proxy button
+        self.test_proxy_button = QPushButton("Test Proxy")
+        self.test_proxy_button.setIcon(qta.icon('fa5s.check-circle', color='#e6f1ff'))
+        self.test_proxy_button.setToolTip("Test the proxy connection")
+        self.test_proxy_button.clicked.connect(self.test_proxy_connection)
+        proxy_input_layout.addWidget(self.test_proxy_button)
+        
         proxy_layout.addWidget(self.proxy_checkbox)
         proxy_layout.addLayout(proxy_input_layout)
         self.proxy_group.setLayout(proxy_layout)
         scroll_layout.addWidget(self.proxy_group)
-
-        # Additional Arguments
-        self.args_group = QGroupBox("Additional Arguments")
-        args_layout = QHBoxLayout()
-        args_icon_label = QLabel()
-        args_icon_label.setPixmap(qta.icon('fa5s.cogs', color='#e6f1ff').pixmap(16, 16))
-        args_icon_label.setStyleSheet("padding-right: 10px;")
-        self.args_text_label = QLabel("Enter additional Chrome arguments (one per line):")
-        self.additional_args_input = QTextEdit()
-        self.additional_args_input.setPlaceholderText("Enter additional Chrome arguments (one per line)")
-        self.additional_args_input.setToolTip("Add Chrome command-line arguments, one per line (e.g., --disable-notifications)")
-        args_layout.addWidget(args_icon_label)
-        args_layout.addWidget(self.args_text_label)
-        args_layout.addWidget(self.additional_args_input)
-        self.args_group.setLayout(args_layout)
-        scroll_layout.addWidget(self.args_group)
+        
+        # Connect proxy checkbox to enable/disable input and test button
+        self.proxy_checkbox.stateChanged.connect(self._toggle_proxy_input)
+        # Set initial state
+        self._toggle_proxy_input(self.proxy_checkbox.isChecked())
 
         scroll_area.setWidget(scroll_content)
         advanced_layout.addWidget(scroll_area)
@@ -1012,6 +1097,7 @@ class MainWindow(QMainWindow):
         self.theme_combo.addItems(["Dark Navy", "Light Blue", "Dark Green", "Light Green", "Soft Pink", "Soft Lavender"])
         self.theme_combo.currentIndexChanged.connect(self.change_theme)
         self.theme_combo.setToolTip("Select the visual theme for the application")
+        self.theme_combo.setAttribute(Qt.WidgetAttribute.WA_AlwaysShowToolTips, True)
         theme_layout.addWidget(theme_icon_label)
         theme_layout.addWidget(self.theme_text_label)
         theme_layout.addWidget(self.theme_combo)
@@ -1030,6 +1116,7 @@ class MainWindow(QMainWindow):
         self.font_size_spin.setValue(12)
         self.font_size_spin.valueChanged.connect(self.change_font_size)
         self.font_size_spin.setToolTip("Adjust the font size for the application (8–24 pt)")
+        self.font_size_spin.setAttribute(Qt.WidgetAttribute.WA_AlwaysShowToolTips, True)
         font_layout.addWidget(font_icon_label)
         font_layout.addWidget(self.font_text_label)
         font_layout.addWidget(self.font_size_spin)
@@ -1047,6 +1134,7 @@ class MainWindow(QMainWindow):
         self.language_combo.addItems(["English", "Japanese", "Korean", "Chinese", "Filipino"])
         self.language_combo.currentIndexChanged.connect(self.change_language)
         self.language_combo.setToolTip("Select the language for the application interface")
+        self.language_combo.setAttribute(Qt.WidgetAttribute.WA_AlwaysShowToolTips, True)
         language_layout.addWidget(language_icon_label)
         language_layout.addWidget(self.language_text_label)
         language_layout.addWidget(self.language_combo)
@@ -1081,8 +1169,14 @@ class MainWindow(QMainWindow):
         self.import_settings_button.setIcon(qta.icon('fa5s.file-import', color='#e6f1ff'))
         self.import_settings_button.clicked.connect(self.import_settings)
         self.import_settings_button.setToolTip("Import settings from a JSON file")
+        self.reset_settings_button = QPushButton()
+        self.reset_settings_button.setText("Reset to Default")
+        self.reset_settings_button.setIcon(qta.icon('fa5s.undo', color='#e6f1ff'))
+        self.reset_settings_button.clicked.connect(self.reset_to_default_settings)
+        self.reset_settings_button.setToolTip("Reset all settings to their default values")
         row2_layout.addWidget(self.export_settings_button)
         row2_layout.addWidget(self.import_settings_button)
+        row2_layout.addWidget(self.reset_settings_button)
         
         actions_layout.addLayout(row1_layout)
         actions_layout.addLayout(row2_layout)
@@ -1341,19 +1435,73 @@ class MainWindow(QMainWindow):
         if browser_type == 'chrome':
             from selenium.webdriver.chrome.options import Options
             browser_options = Options()
+            # Set Chrome binary location based on platform
+            import os
+            if os.name == 'nt':  # Windows
+                chrome_paths = [
+                    "C:\\Program Files\\Google\\Chrome\\Application\\chrome.exe",
+                    "C:\\Program Files (x86)\\Google\\Chrome\\Application\\chrome.exe",
+                    os.path.expanduser("~\\AppData\\Local\\Google\\Chrome\\Application\\chrome.exe")
+                ]
+            elif os.name == 'posix':  # Linux/macOS
+                chrome_paths = [
+                    "/usr/bin/google-chrome",
+                    "/usr/bin/google-chrome-stable",
+                    "/usr/bin/chromium",
+                    "/usr/bin/chromium-browser",
+                    "/Applications/Google Chrome.app/Contents/MacOS/Google Chrome"  # macOS
+                ]
+            else:
+                chrome_paths = []
+            
+            for path in chrome_paths:
+                if os.path.exists(path):
+                    browser_options.binary_location = path
+                    self.log_message(f"Found Chrome binary at: {path}", "DEBUG")
+                    break
+            else:
+                self.log_message(f"Chrome binary not found in standard locations. Chrome paths checked: {chrome_paths}", "WARNING")
+                # Try to find Chrome in PATH as fallback
+                import shutil
+                chrome_in_path = shutil.which("chrome") or shutil.which("google-chrome") or shutil.which("chromium")
+                if chrome_in_path:
+                    browser_options.binary_location = chrome_in_path
+                    self.log_message(f"Found Chrome in PATH: {chrome_in_path}", "DEBUG")
+                else:
+                    self.log_message("Chrome binary not found. WebDriver may fail to start.", "WARNING")
             if self.headless_checkbox.isChecked():
-                browser_options.add_argument("--headless")
+                browser_options.add_argument("--headless=new")  # Use new headless implementation (Chrome 109+)
             if self.disable_gpu_checkbox.isChecked():
                 browser_options.add_argument("--disable-gpu")
             if self.incognito_checkbox.isChecked():
                 browser_options.add_argument("--incognito")
             if self.disable_extensions_checkbox.isChecked():
                 browser_options.add_argument("--disable-extensions")
-            if self.start_maximized_checkbox.isChecked():
+            if not self.headless_checkbox.isChecked() and self.start_maximized_checkbox.isChecked():
                 browser_options.add_argument("--start-maximized")
         elif browser_type == 'firefox':
             from selenium.webdriver.firefox.options import Options
             browser_options = Options()
+            # Set Firefox binary location based on platform
+            import os
+            if os.name == 'nt':  # Windows
+                firefox_paths = [
+                    "C:\\Program Files\\Mozilla Firefox\\firefox.exe",
+                    "C:\\Program Files (x86)\\Mozilla Firefox\\firefox.exe"
+                ]
+            elif os.name == 'posix':  # Linux/macOS
+                firefox_paths = [
+                    "/usr/bin/firefox",
+                    "/usr/lib/firefox/firefox",
+                    "/Applications/Firefox.app/Contents/MacOS/firefox"  # macOS
+                ]
+            else:
+                firefox_paths = []
+            
+            for path in firefox_paths:
+                if os.path.exists(path):
+                    browser_options.binary_location = path
+                    break
             if self.headless_checkbox.isChecked():
                 browser_options.add_argument("--headless")
             # Firefox specific options can be added here
@@ -1377,10 +1525,35 @@ class MainWindow(QMainWindow):
                     browser_options.set_preference("network.proxy.http", proxy.split(':')[0])
                     browser_options.set_preference("network.proxy.http_port", int(proxy.split(':')[1]))
 
-        additional_args = self.additional_args_input.toPlainText().split("\n")
-        for arg in additional_args:
-            if arg.strip():
-                browser_options.add_argument(arg.strip())
+        # Apply browser-specific options
+        if browser_type == 'chrome':
+            # Add some basic stability options
+            browser_options.add_argument("--disable-background-timer-throttling")
+            browser_options.add_argument("--disable-backgrounding-occluded-windows")
+            browser_options.add_argument("--disable-renderer-backgrounding")
+            
+            if self.disable_notifications_checkbox.isChecked():
+                browser_options.add_argument("--disable-notifications")
+            if self.disable_web_security_checkbox.isChecked():
+                browser_options.add_argument("--disable-web-security")
+            # Only add sandbox options if explicitly needed (usually for containers)
+            if self.no_sandbox_checkbox.isChecked():
+                browser_options.add_argument("--no-sandbox")
+            # Only add dev-shm-usage on Linux, not Windows
+            if self.disable_dev_shm_checkbox.isChecked() and os.name == 'posix':
+                browser_options.add_argument("--disable-dev-shm-usage")
+        elif browser_type == 'firefox':
+            if self.disable_notifications_checkbox.isChecked():
+                browser_options.set_preference("dom.webnotifications.enabled", False)
+            # Firefox doesn't have direct equivalents for some Chrome options
+            # disable_web_security, no_sandbox, disable_dev_shm are Chrome-specific
+
+        # Debug logging for browser options
+        self.log_message(f"Browser: {browser_type}, Binary: {getattr(browser_options, 'binary_location', 'Not set')}", "DEBUG")
+        if hasattr(browser_options, 'arguments'):
+            self.log_message(f"Browser arguments: {browser_options.arguments}", "DEBUG")
+        elif hasattr(browser_options, '_arguments'):
+            self.log_message(f"Browser arguments: {browser_options._arguments}", "DEBUG")
 
         for instance_id in range(instances):
             thread = BrowserThread(url, iterations, interval, browser_options, instance_id, browser_type)
@@ -1401,7 +1574,7 @@ class MainWindow(QMainWindow):
             thread.deleteLater()
             self.log_message(f"Browser thread for instance {thread.instance_id} finished", "INFO")
             # Add small delay between thread starts to prevent overwhelming the system
-            QTimer.singleShot(instance_id * 500, lambda: None)  # Non-blocking delay
+            QTimer.singleShot(thread.instance_id * 500, lambda: None)  # Non-blocking delay
         self.status_message.setText("Running...")
 
     def stop_browser(self):
@@ -1450,6 +1623,54 @@ class MainWindow(QMainWindow):
             self.log_message("Process cleanup completed", "INFO")
         except Exception as e:
             self.log_message(f"Process cleanup error: {str(e)}", "WARNING")
+
+    def test_proxy_connection(self):
+        """Test the proxy connection by making a request through it."""
+        proxy_address = self.proxy_address_input.text().strip()
+        if not proxy_address:
+            QMessageBox.warning(self, "Proxy Test", "Please enter a proxy address first.")
+            return
+        
+        # Parse proxy address
+        try:
+            if ':' not in proxy_address:
+                raise ValueError("Invalid proxy format")
+            host, port_str = proxy_address.rsplit(':', 1)
+            port = int(port_str)
+        except ValueError:
+            QMessageBox.warning(self, "Proxy Test", "Invalid proxy format. Use IP:PORT (e.g., 127.0.0.1:8080)")
+            return
+        
+        # Test the proxy
+        self.test_proxy_button.setEnabled(False)
+        self.test_proxy_button.setText("Testing...")
+        
+        # Create and start proxy test thread
+        self.proxy_test_thread = ProxyTestThread(proxy_address)
+        self.proxy_test_thread.test_finished.connect(self.on_proxy_test_finished)
+        self.proxy_test_thread.start()
+    
+    def on_proxy_test_finished(self, message, msg_type):
+        """Handle proxy test completion."""
+        if msg_type == 'success':
+            QMessageBox.information(self, "Proxy Test", message)
+        else:
+            QMessageBox.warning(self, "Proxy Test", message)
+        
+        # Reset button
+        self.test_proxy_button.setEnabled(True)
+        self.test_proxy_button.setText("Test Proxy")
+        
+        # Clean up thread
+        self.proxy_test_thread.quit()
+        self.proxy_test_thread.wait()
+        self.proxy_test_thread = None
+
+    def _toggle_proxy_input(self, state):
+        """Enable/disable proxy input and test button based on checkbox state."""
+        enabled = bool(state)
+        self.proxy_address_input.setEnabled(enabled)
+        self.test_proxy_button.setEnabled(enabled)
 
     def reset_fields(self):
         self.url_input.setText("https://google.com/")
@@ -1590,28 +1811,38 @@ class MainWindow(QMainWindow):
                 "advanced_incognito": "Incognito mode",
                 "advanced_disable_extensions": "Disable extensions",
                 "advanced_start_maximized": "Start maximized",
+                "advanced_disable_notifications": "Disable notifications",
+                "advanced_disable_web_security": "Disable web security",
+                "advanced_no_sandbox": "No sandbox",
+                "advanced_disable_dev_shm": "Disable /dev/shm usage",
                 "advanced_user_agent": "Enter custom user agent (optional):",
                 "advanced_proxy": "Use proxy",
                 "advanced_proxy_address": "Proxy address (e.g., 127.0.0.1:8080):",
-                "advanced_args": "Enter additional Chrome arguments (one per line):",
-                "advanced_headless_tooltip": "Run Chrome in headless mode (no UI)",
+                "advanced_headless_tooltip": "Run browser in headless mode (no UI) - uses new headless implementation",
                 "advanced_disable_gpu_tooltip": "Disable GPU hardware acceleration",
-                "advanced_incognito_tooltip": "Run Chrome in incognito mode",
-                "advanced_disable_extensions_tooltip": "Disable all Chrome extensions",
-                "advanced_start_maximized_tooltip": "Start Chrome maximized",
+                "advanced_incognito_tooltip": "Run browser in private/incognito mode",
+                "advanced_disable_extensions_tooltip": "Disable all browser extensions",
+                "advanced_start_maximized_tooltip": "Start browser maximized",
+                "advanced_disable_notifications": "Disable notifications",
+                "advanced_disable_notifications_tooltip": "Disable browser notifications",
+                "advanced_disable_web_security": "Disable web security",
+                "advanced_disable_web_security_tooltip": "Disable web security features (Chrome only)",
+                "advanced_no_sandbox": "No sandbox",
+                "advanced_no_sandbox_tooltip": "Disable sandbox (Chrome only)",
+                "advanced_disable_dev_shm": "Disable /dev/shm usage",
+                "advanced_disable_dev_shm_tooltip": "Disable /dev/shm usage (Chrome only)",
                 "advanced_user_agent_tooltip": "Enter a custom user agent for the browser (optional)",
                 "advanced_proxy_tooltip": "Enable use of a proxy server",
                 "advanced_proxy_address_tooltip": "Enter proxy address in the format IP:PORT (e.g., 127.0.0.1:8080)",
-                "advanced_args_tooltip": "Add Chrome command-line arguments, one per line (e.g., --disable-notifications)",
-                "chrome_options_group": "Chrome Options",
+                "browser_options_group": "Browser Options",
                 "user_agent_group": "User Agent",
                 "proxy_group": "Proxy Settings",
-                "args_group": "Additional Arguments",
                 "settings_theme": "Theme:",
                 "settings_font": "Font Size:",
                 "settings_language": "Language:",
                 "settings_save": "Save Settings",
                 "settings_load": "Load Settings",
+                "settings_reset": "Reset to Default",
                 "settings_export": "Export Logs",
                 "settings_clear": "Clear Logs",
                 "settings_autostart": "Auto-Start on Launch:",
@@ -1621,6 +1852,7 @@ class MainWindow(QMainWindow):
                 "settings_language_tooltip": "Select the language for the application interface",
                 "settings_save_tooltip": "Save current application settings",
                                 "settings_load_tooltip": "Load previously saved settings",
+                "settings_reset_tooltip": "Reset all settings to their default values",
                 "settings_export_tooltip": "Export application logs to a text file",
                 "settings_clear_tooltip": "Clear all log messages",
                 "settings_autostart_tooltip": "Automatically start the browser on application launch",
@@ -1708,28 +1940,39 @@ class MainWindow(QMainWindow):
                 "advanced_incognito": "インコグニトモード",
                 "advanced_disable_extensions": "拡張機能を無効化",
                 "advanced_start_maximized": "最大化して開始",
+                "advanced_disable_notifications": "通知を無効化",
+                "advanced_disable_web_security": "ウェブセキュリティを無効化",
+                "advanced_no_sandbox": "サンドボックスなし",
+                "advanced_disable_dev_shm": "/dev/shm使用を無効化",
                 "advanced_user_agent": "カスタムユーザーエージェントを入力 (オプション):",
                 "advanced_proxy": "プロキシを使用",
                 "advanced_proxy_address": "プロキシアドレス (例: 127.0.0.1:8080):",
-                "advanced_args": "追加のChrome引数を入力 (1行ごとに):",
-                "advanced_headless_tooltip": "Chromeをヘッドレスモードで実行 (UIなし)",
+                "advanced_headless_tooltip": "ブラウザをヘッドレスモードで実行 (UIなし) - 新しいヘッドレス実装を使用",
                 "advanced_disable_gpu_tooltip": "GPUハードウェアアクセラレーションを無効化",
-                "advanced_incognito_tooltip": "Chromeをインコグニトモードで実行",
-                "advanced_disable_extensions_tooltip": "すべてのChrome拡張機能を無効化",
-                "advanced_start_maximized_tooltip": "Chromeを最大化して開始",
+                "advanced_incognito_tooltip": "ブラウザをプライベート/インコグニトモードで実行",
+                "advanced_disable_extensions_tooltip": "すべてのブラウザ拡張機能を無効化",
+                "advanced_start_maximized_tooltip": "ブラウザを最大化して開始",
+                "advanced_disable_notifications": "通知を無効化",
+                "advanced_disable_notifications_tooltip": "ブラウザ通知を無効化",
+                "advanced_disable_web_security": "ウェブセキュリティを無効化",
+                "advanced_disable_web_security_tooltip": "ウェブセキュリティ機能を無効化 (Chromeのみ)",
+                "advanced_no_sandbox": "サンドボックスなし",
+                "advanced_no_sandbox_tooltip": "サンドボックスを無効化 (Chromeのみ)",
+                "advanced_disable_dev_shm": "/dev/shm使用を無効化",
+                "advanced_disable_dev_shm_tooltip": "/dev/shm使用を無効化 (Chromeのみ)",
                 "advanced_user_agent_tooltip": "ブラウザ用のカスタムユーザーエージェントを入力 (オプション)",
                 "advanced_proxy_tooltip": "プロキシサーバーの使用を有効化",
                 "advanced_proxy_address_tooltip": "プロキシアドレスをIP:PORT形式で入力 (例: 127.0.0.1:8080)",
                 "advanced_args_tooltip": "Chromeコマンドライン引数を1行ごとに追加 (例: --disable-notifications)",
-                "chrome_options_group": "Chromeオプション",
+                "browser_options_group": "Chromeオプション",
                 "user_agent_group": "ユーザーエージェント",
                 "proxy_group": "プロキシ設定",
-                "args_group": "追加引数",
                 "settings_theme": "テーマ：",
                 "settings_font": "フォントサイズ：",
                 "settings_language": "言語：",
                 "settings_save": "設定を保存",
                 "settings_load": "設定を読み込む",
+                "settings_reset": "デフォルトにリセット",
                 "settings_export": "ログをエクスポート",
                 "settings_clear": "ログをクリア",
                 "settings_autostart": "起動時の自動開始：",
@@ -1739,6 +1982,7 @@ class MainWindow(QMainWindow):
                 "settings_language_tooltip": "アプリケーションインターフェイスの言語を選択します",
                 "settings_save_tooltip": "現在のアプリケーション設定を保存します",
                 "settings_load_tooltip": "以前に保存された設定を読み込みます",
+                "settings_reset_tooltip": "すべての設定をデフォルト値にリセットします",
                 "settings_export_tooltip": "アプリケーションのログをテキストファイルにエクスポートします",
                 "settings_clear_tooltip": "すべてのログメッセージをクリアします",
                 "settings_autostart_tooltip": "アプリケーション起動時にブラウザを自動的に開始します",
@@ -1826,28 +2070,39 @@ class MainWindow(QMainWindow):
                 "advanced_incognito": "시크릿 모드",
                 "advanced_disable_extensions": "확장 프로그램 비활성화",
                 "advanced_start_maximized": "최대화하여 시작",
+                "advanced_disable_notifications": "알림 비활성화",
+                "advanced_disable_web_security": "웹 보안 비활성화",
+                "advanced_no_sandbox": "샌드박스 없음",
+                "advanced_disable_dev_shm": "/dev/shm 사용 비활성화",
                 "advanced_user_agent": "사용자 정의 사용자 에이전트 입력 (옵션):",
                 "advanced_proxy": "프록시 사용",
                 "advanced_proxy_address": "프록시 주소 (예: 127.0.0.1:8080):",
-                "advanced_args": "추가 Chrome 인수 입력 (줄마다 하나씩):",
-                "advanced_headless_tooltip": "Chrome을 헤드리스 모드에서 실행 (UI 없음)",
+                "advanced_headless_tooltip": "브라우저를 헤드리스 모드에서 실행 (UI 없음) - 새로운 헤드리스 구현 사용",
                 "advanced_disable_gpu_tooltip": "GPU 하드웨어 가속 비활성화",
-                "advanced_incognito_tooltip": "Chrome을 시크릿 모드에서 실행",
-                "advanced_disable_extensions_tooltip": "모든 Chrome 확장 프로그램 비활성화",
-                "advanced_start_maximized_tooltip": "Chrome을 최대화하여 시작",
+                "advanced_incognito_tooltip": "브라우저를 프라이빗/시크릿 모드에서 실행",
+                "advanced_disable_extensions_tooltip": "모든 브라우저 확장 프로그램 비활성화",
+                "advanced_start_maximized_tooltip": "브라우저를 최대화하여 시작",
+                "advanced_disable_notifications": "알림 비활성화",
+                "advanced_disable_notifications_tooltip": "브라우저 알림 비활성화",
+                "advanced_disable_web_security": "웹 보안 비활성화",
+                "advanced_disable_web_security_tooltip": "웹 보안 기능 비활성화 (Chrome 전용)",
+                "advanced_no_sandbox": "샌드박스 없음",
+                "advanced_no_sandbox_tooltip": "샌드박스 비활성화 (Chrome 전용)",
+                "advanced_disable_dev_shm": "/dev/shm 사용 비활성화",
+                "advanced_disable_dev_shm_tooltip": "/dev/shm 사용 비활성화 (Chrome 전용)",
                 "advanced_user_agent_tooltip": "브라우저용 사용자 정의 사용자 에이전트를 입력 (옵션)",
                 "advanced_proxy_tooltip": "프록시 서버 사용 활성화",
                 "advanced_proxy_address_tooltip": "프록시 주소를 IP:PORT 형식으로 입력 (예: 127.0.0.1:8080)",
                 "advanced_args_tooltip": "Chrome 명령줄 인수를 줄마다 하나씩 추가 (예: --disable-notifications)",
-                "chrome_options_group": "Chrome 옵션",
+                "browser_options_group": "Chrome 옵션",
                 "user_agent_group": "사용자 에이전트",
                 "proxy_group": "프록시 설정",
-                "args_group": "추가 인수",
                 "settings_theme": "테마：",
                 "settings_font": "글꼴 크기：",
                 "settings_language": "언어：",
                 "settings_save": "설정 저장",
                 "settings_load": "설정 불러오기",
+                "settings_reset": "기본값으로 재설정",
                 "settings_export": "로그 내보내기",
                 "settings_clear": "로그 지우기",
                 "settings_autostart": "시작 시 자동 시작：",
@@ -1857,6 +2112,7 @@ class MainWindow(QMainWindow):
                 "settings_language_tooltip": "애플리케이션 인터페이스의 언어를 선택하세요",
                 "settings_save_tooltip": "현재 애플리케이션 설정을 저장하세요",
                 "settings_load_tooltip": "이전에 저장된 설정을 불러오세요",
+                "settings_reset_tooltip": "모든 설정을 기본값으로 재설정하세요",
                 "settings_export_tooltip": "애플리케이션 로그를 텍스트 파일로 내보내세요",
                 "settings_clear_tooltip": "모든 로그 메시지를 지우세요",
                 "settings_autostart_tooltip": "애플리케이션 시작 시 브라우저를 자동으로 시작하세요",
@@ -1944,28 +2200,35 @@ class MainWindow(QMainWindow):
                 "advanced_incognito": "隐身模式",
                 "advanced_disable_extensions": "禁用扩展",
                 "advanced_start_maximized": "最大化启动",
+                "advanced_disable_notifications": "禁用通知",
+                "advanced_disable_web_security": "禁用网络安全",
+                "advanced_no_sandbox": "无沙箱",
+                "advanced_disable_dev_shm": "禁用/dev/shm使用",
                 "advanced_user_agent": "输入自定义用户代理（可选）：",
                 "advanced_proxy": "使用代理",
                 "advanced_proxy_address": "代理地址（例如：127.0.0.1:8080）：",
-                "advanced_args": "输入附加的Chrome参数（每行一个）：",
-                "advanced_headless_tooltip": "以无头模式运行Chrome（无UI）",
+                "advanced_headless_tooltip": "以无头模式运行浏览器（无UI）- 使用新的无头实现",
                 "advanced_disable_gpu_tooltip": "禁用GPU硬件加速",
-                "advanced_incognito_tooltip": "以隐身模式运行Chrome",
-                "advanced_disable_extensions_tooltip": "禁用所有Chrome扩展",
-                "advanced_start_maximized_tooltip": "最大化启动Chrome",
-                "advanced_user_agent_tooltip": "为浏览器输入自定义用户代理（可选）",
-                "advanced_proxy_tooltip": "启用代理服务器使用",
-                "advanced_proxy_address_tooltip": "以IP:PORT格式输入代理地址（例如：127.0.0.1:8080）",
-                "advanced_args_tooltip": "添加Chrome命令行参数，每行一个（例如：--disable-notifications）",
-                "chrome_options_group": "Chrome选项",
+                "advanced_incognito_tooltip": "以隐私/隐身模式运行浏览器",
+                "advanced_disable_extensions_tooltip": "禁用所有浏览器扩展",
+                "advanced_start_maximized_tooltip": "最大化启动浏览器",
+                "advanced_disable_notifications": "禁用通知",
+                "advanced_disable_notifications_tooltip": "禁用浏览器通知",
+                "advanced_disable_web_security": "禁用网络安全",
+                "advanced_disable_web_security_tooltip": "禁用网络安全功能（Chrome专用）",
+                "advanced_no_sandbox": "无沙箱",
+                "advanced_no_sandbox_tooltip": "禁用沙箱（Chrome专用）",
+                "advanced_disable_dev_shm": "禁用/dev/shm使用",
+                "advanced_disable_dev_shm_tooltip": "禁用/dev/shm使用（Chrome专用）",
+                "browser_options_group": "浏览器选项",
                 "user_agent_group": "用户代理",
                 "proxy_group": "代理设置",
-                "args_group": "附加参数",
                 "settings_theme": "主题：",
                 "settings_font": "字体大小：",
                 "settings_language": "语言：",
                 "settings_save": "保存设置",
                 "settings_load": "加载设置",
+                "settings_reset": "重置为默认",
                 "settings_export": "导出日志",
                 "settings_clear": "清除日志",
                 "settings_autostart": "启动时自动启动：",
@@ -1975,6 +2238,7 @@ class MainWindow(QMainWindow):
                 "settings_language_tooltip": "选择应用程序界面的语言",
                 "settings_save_tooltip": "保存当前应用程序设置",
                 "settings_load_tooltip": "加载之前保存的设置",
+                "settings_reset_tooltip": "将所有设置重置为默认值",
                 "settings_export_tooltip": "将应用程序日志导出到文本文件",
                 "settings_clear_tooltip": "清除所有日志消息",
                 "settings_autostart_tooltip": "在应用程序启动时自动启动浏览器",
@@ -2062,28 +2326,35 @@ class MainWindow(QMainWindow):
                 "advanced_incognito": "Incognito mode",
                 "advanced_disable_extensions": "Huwag paganahin ang mga extension",
                 "advanced_start_maximized": "Simulan nang pinakamalaki",
+                "advanced_disable_notifications": "Huwag paganahin ang mga notification",
+                "advanced_disable_web_security": "Huwag paganahin ang web security",
+                "advanced_no_sandbox": "Walang sandbox",
+                "advanced_disable_dev_shm": "Huwag paganahin ang /dev/shm usage",
                 "advanced_user_agent": "Magpasok ng custom user agent (opsyonal):",
                 "advanced_proxy": "Gumamit ng proxy",
                 "advanced_proxy_address": "Address ng proxy (hal. 127.0.0.1:8080):",
-                "advanced_args": "Magpasok ng karagdagang Chrome na argumento (isa bawat linya):",
-                "advanced_headless_tooltip": "Patakbuhin ang Chrome sa headless mode (walang UI)",
+                "advanced_headless_tooltip": "Patakbuhin ang browser sa headless mode (walang UI)",
                 "advanced_disable_gpu_tooltip": "Huwag paganahin ang hardware acceleration ng GPU",
-                "advanced_incognito_tooltip": "Patakbuhin ang Chrome sa incognito mode",
-                "advanced_disable_extensions_tooltip": "Huwag paganahin ang lahat ng Chrome extensions",
-                "advanced_start_maximized_tooltip": "Simulan ang Chrome nang pinakamalaki",
-                "advanced_user_agent_tooltip": "Magpasok ng custom user agent para sa browser (opsyonal)",
-                "advanced_proxy_tooltip": "Paganahin ang paggamit ng proxy server",
-                "advanced_proxy_address_tooltip": "Magpasok ng address ng proxy sa format ng IP:PORT (hal. 127.0.0.1:8080)",
-                "advanced_args_tooltip": "Magdagdag ng Chrome command-line arguments, isa bawat linya (hal. --disable-notifications)",
-                "chrome_options_group": "Mga Opsyon ng Chrome",
+                "advanced_incognito_tooltip": "Patakbuhin ang browser sa private/incognito mode",
+                "advanced_disable_extensions_tooltip": "Huwag paganahin ang lahat ng browser extensions",
+                "advanced_start_maximized_tooltip": "Simulan ang browser nang pinakamalaki",
+                "advanced_disable_notifications": "Huwag paganahin ang mga notification",
+                "advanced_disable_notifications_tooltip": "Huwag paganahin ang mga notification ng browser",
+                "advanced_disable_web_security": "Huwag paganahin ang web security",
+                "advanced_disable_web_security_tooltip": "Huwag paganahin ang mga web security features (Chrome lang)",
+                "advanced_no_sandbox": "Walang sandbox",
+                "advanced_no_sandbox_tooltip": "Huwag paganahin ang sandbox (Chrome lang)",
+                "advanced_disable_dev_shm": "Huwag paganahin ang /dev/shm usage",
+                "advanced_disable_dev_shm_tooltip": "Huwag paganahin ang /dev/shm usage (Chrome lang)",
+                "browser_options_group": "Mga Opsyon ng Browser",
                 "user_agent_group": "User Agent",
                 "proxy_group": "Mga Setting ng Proxy",
-                "args_group": "Karagdagang Mga Argumento",
                 "settings_theme": "Tema:",
                 "settings_font": "Laki ng Font:",
                 "settings_language": "Wika:",
                 "settings_save": "I-save ang Mga Setting",
                 "settings_load": "Mag-load ng Mga Setting",
+                "settings_reset": "I-reset sa Default",
                 "settings_export": "I-export ang Mga Log",
                 "settings_clear": "Burahin ang Mga Log",
                 "settings_autostart": "Auto-Start kapag Naglunsad:",
@@ -2093,6 +2364,7 @@ class MainWindow(QMainWindow):
                 "settings_language_tooltip": "Pumili ng wika para sa interface ng aplikasyon",
                 "settings_save_tooltip": "I-save ang kasalukuyang mga setting ng aplikasyon",
                 "settings_load_tooltip": "Mag-load ng mga na-save nang naunang mga setting",
+                "settings_reset_tooltip": "I-reset ang lahat ng mga setting sa kanilang mga default na halaga",
                 "settings_export_tooltip": "I-export ang mga log ng aplikasyon sa isang text file",
                 "settings_clear_tooltip": "Burahin ang lahat ng mga mensahe ng log",
                 "settings_autostart_tooltip": "Awtomatikong simulan ang browser kapag naglunsad ang aplikasyon",
@@ -2195,18 +2467,18 @@ class MainWindow(QMainWindow):
         self.disable_extensions_checkbox.setToolTip(translations["advanced_disable_extensions_tooltip"])
         self.start_maximized_checkbox.setText(translations["advanced_start_maximized"])
         self.start_maximized_checkbox.setToolTip(translations["advanced_start_maximized_tooltip"])
+        self.disable_notifications_checkbox.setText(translations["advanced_disable_notifications"])
+        self.disable_notifications_checkbox.setToolTip(translations["advanced_disable_notifications_tooltip"])
+        self.disable_web_security_checkbox.setText(translations["advanced_disable_web_security"])
+        self.disable_web_security_checkbox.setToolTip(translations["advanced_disable_web_security_tooltip"])
+        self.no_sandbox_checkbox.setText(translations["advanced_no_sandbox"])
+        self.no_sandbox_checkbox.setToolTip(translations["advanced_no_sandbox_tooltip"])
+        self.disable_dev_shm_checkbox.setText(translations["advanced_disable_dev_shm"])
+        self.disable_dev_shm_checkbox.setToolTip(translations["advanced_disable_dev_shm_tooltip"])
         self.user_agent_text_label.setText(translations["advanced_user_agent"])
-        self.user_agent_input.setToolTip(translations["advanced_user_agent_tooltip"])
-        self.proxy_checkbox.setText(translations["advanced_proxy"])
-        self.proxy_checkbox.setToolTip(translations["advanced_proxy_tooltip"])
-        self.proxy_text_label.setText(translations["advanced_proxy_address"])
-        self.proxy_address_input.setToolTip(translations["advanced_proxy_address_tooltip"])
-        self.args_text_label.setText(translations["advanced_args"])
-        self.additional_args_input.setToolTip(translations["advanced_args_tooltip"])
-        self.chrome_options_group.setTitle(translations["chrome_options_group"])
+        self.browser_options_group.setTitle(translations["browser_options_group"])
         self.user_agent_group.setTitle(translations["user_agent_group"])
         self.proxy_group.setTitle(translations["proxy_group"])
-        self.args_group.setTitle(translations["args_group"])
         self.tab_widget.setTabText(1, translations["tab_advanced"])
 
         # Settings Tab
@@ -2220,6 +2492,8 @@ class MainWindow(QMainWindow):
         self.save_settings_button.setToolTip(translations["settings_save_tooltip"])
         self.load_settings_button.setText(translations["settings_load"])
         self.load_settings_button.setToolTip(translations["settings_load_tooltip"])
+        self.reset_settings_button.setText(translations["settings_reset"])
+        self.reset_settings_button.setToolTip(translations["settings_reset_tooltip"])
         self.export_log_button.setText(translations["settings_export"])
         self.export_log_button.setToolTip(translations["settings_export_tooltip"])
         self.clear_logs_button.setText(translations["settings_clear"])
@@ -2307,10 +2581,13 @@ class MainWindow(QMainWindow):
             'incognito_checkbox': self.incognito_checkbox,
             'disable_extensions_checkbox': self.disable_extensions_checkbox,
             'start_maximized_checkbox': self.start_maximized_checkbox,
+            'disable_notifications_checkbox': self.disable_notifications_checkbox,
+            'disable_web_security_checkbox': self.disable_web_security_checkbox,
+            'no_sandbox_checkbox': self.no_sandbox_checkbox,
+            'disable_dev_shm_checkbox': self.disable_dev_shm_checkbox,
             'user_agent_input': self.user_agent_input,
             'proxy_checkbox': self.proxy_checkbox,
             'proxy_address_input': self.proxy_address_input,
-            'additional_args_input': self.additional_args_input,
             'autostart_check': getattr(self, 'autostart_check', None),
             'lock_window_size_check': getattr(self, 'lock_window_size_check', None)
         }
@@ -2333,10 +2610,13 @@ class MainWindow(QMainWindow):
             'incognito_checkbox': self.incognito_checkbox,
             'disable_extensions_checkbox': self.disable_extensions_checkbox,
             'start_maximized_checkbox': self.start_maximized_checkbox,
+            'disable_notifications_checkbox': self.disable_notifications_checkbox,
+            'disable_web_security_checkbox': self.disable_web_security_checkbox,
+            'no_sandbox_checkbox': self.no_sandbox_checkbox,
+            'disable_dev_shm_checkbox': self.disable_dev_shm_checkbox,
             'user_agent_input': self.user_agent_input,
             'proxy_checkbox': self.proxy_checkbox,
             'proxy_address_input': self.proxy_address_input,
-            'additional_args_input': self.additional_args_input,
             'autostart_check': getattr(self, 'autostart_check', None),
             'lock_window_size_check': getattr(self, 'lock_window_size_check', None)
         }
@@ -2368,13 +2648,70 @@ class MainWindow(QMainWindow):
             except Exception as e:
                 self.log_message(f"Failed to import settings: {str(e)}", "ERROR")
 
+    def reset_to_default_settings(self):
+        """Reset all settings to their default values."""
+        reply = QMessageBox.question(
+            self, "Reset Settings",
+            "Are you sure you want to reset all settings to their default values?\n\nThis action cannot be undone.",
+            QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
+            QMessageBox.StandardButton.No
+        )
+        
+        if reply == QMessageBox.StandardButton.Yes:
+            try:
+                # Clear all settings
+                self.settings_manager.settings.clear()
+                
+                # Reset UI elements to defaults
+                self.url_input.setText("https://google.com/")
+                self.iterations_input.setValue(0)
+                self.interval_input.setValue(1)
+                self.instances_input.setValue(1)
+                self.theme_combo.setCurrentIndex(0)
+                self.font_size_spin.setValue(12)
+                self.language_combo.setCurrentIndex(0)
+                self.headless_checkbox.setChecked(False)
+                self.disable_gpu_checkbox.setChecked(False)
+                self.incognito_checkbox.setChecked(False)
+                self.disable_extensions_checkbox.setChecked(False)
+                self.start_maximized_checkbox.setChecked(False)
+                self.disable_notifications_checkbox.setChecked(False)
+                self.disable_web_security_checkbox.setChecked(False)
+                self.no_sandbox_checkbox.setChecked(False)
+                self.disable_dev_shm_checkbox.setChecked(False)
+                self.user_agent_input.setText("")
+                self.proxy_checkbox.setChecked(False)
+                self.proxy_address_input.setText("")
+                if hasattr(self, 'autostart_check'):
+                    self.autostart_check.setChecked(False)
+                if hasattr(self, 'lock_window_size_check'):
+                    self.lock_window_size_check.setChecked(True)
+                
+                # Apply theme and font changes
+                self.change_theme(0)
+                self.change_font_size(12)
+                self.change_language(0)
+                self.update_window_size_lock()
+                
+                self.log_message("All settings reset to default values", "INFO")
+                
+            except Exception as e:
+                self.log_message(f"Failed to reset settings: {str(e)}", "ERROR")
+
     def closeEvent(self, event):
+        # Auto-save settings before closing
+        try:
+            self.save_settings()
+            self.log_message("Settings auto-saved on exit", "INFO")
+        except Exception as e:
+            self.log_message(f"Failed to auto-save settings: {str(e)}", "WARNING")
+        
         self.stop_browser()
         for thread in self.threads:
             if thread.isRunning():
                 thread.terminate()
                 QTimer.singleShot(0, lambda t=thread: t.wait(5000))
-        self.kill_remaining_processes()
+        self.kill_remaining_processes_async()
         event.accept()
 
     def resizeEvent(self, event):
