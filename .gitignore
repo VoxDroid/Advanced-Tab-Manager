@@ -65,3 +65,6 @@ logs/
 # Advanced Tab Manager
 /.app
 /.venv
+
+# Briefcase
+/.Briefcase

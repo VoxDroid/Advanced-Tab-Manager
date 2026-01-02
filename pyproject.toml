@@ -24,7 +24,9 @@ requires = [
     "qtawesome",
     "selenium",
     "webdriver-manager",
-    "psutil"
+    "psutil",
+    "packaging",
+    "requests"
 ]
 
 test_requires = [

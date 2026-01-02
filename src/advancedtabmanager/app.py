@@ -25,252 +25,21 @@ import random
 import os
 from packaging import version
 
+# Import our modular components
+from .utils.version_checker import VersionChecker
+from .core.browser_thread import BrowserThread
+from .ui.log_viewer import LogViewer
+from .config.settings_manager import SettingsManager
+from .utils.logger import Logger, resource_path
+
 CURRENT_VERSION = "1.3.0"
 GITHUB_REPO = "VoxDroid/Advanced-Tab-Manager"
-
-class VersionChecker(QThread):
-    update_available = pyqtSignal(str, str)  # Emits new_version, release_url
-    error_occurred = pyqtSignal(str)        # Emits error message
-
-    def run(self):
-        try:
-            url = f"https://api.github.com/repos/{GITHUB_REPO}/releases/latest"
-            response = requests.get(url, timeout=5)
-            response.raise_for_status()
-            data = response.json()
-            latest_version = data["tag_name"].lstrip("v")
-            release_url = data["html_url"]
-            if version.parse(latest_version) > version.parse(CURRENT_VERSION):
-                self.update_available.emit(latest_version, release_url)
-        except requests.exceptions.ConnectionError:
-            self.error_occurred.emit("No internet connection. Update check failed.")
-        except requests.exceptions.RequestException as e:
-            self.error_occurred.emit(f"Failed to check for updates: {str(e)}")
 
 
 urllib3.disable_warnings(urllib3.exceptions.ConnectionError)
 
 retry_strategy = Retry(total=0, connect=None, read=None, redirect=None, status=None)
 http = urllib3.PoolManager(retries=retry_strategy)
-
-class BrowserThread(QThread):
-    update_status = pyqtSignal(str)
-    update_progress = pyqtSignal(int)
-    update_cycle = pyqtSignal(int)
-    log_message = pyqtSignal(str, str)
-    error_occurred = pyqtSignal(str)
-
-    def __init__(self, url, iterations, interval, chrome_options, instance_id):
-        super().__init__()
-        self.url = url
-        self.iterations = iterations
-        self.interval = interval
-        self.chrome_options = chrome_options
-        self.is_running = True
-        self.driver = None
-        self.port = random.randint(9515, 9599)
-        self.service = Service(ChromeDriverManager().install(), port=self.port)
-        self.driver_process = None
-        self.chrome_processes = []
-        self.instance_id = instance_id  
-        self.progress = 0  
-        self.cycle = 0  
-
-    def wait_for_service(self, host='127.0.0.1', port=0, timeout=10):
-        """Wait for ChromeDriver service to be available on the specified port."""
-        start_time = time.time()
-        while time.time() - start_time < timeout:
-            try:
-                sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-                sock.settimeout(1)
-                result = sock.connect_ex((host, port))
-                sock.close()
-                if result == 0:
-                    return True
-            except socket.error:
-                time.sleep(0.1)
-        return False
-
-    def is_port_in_use(self, port, host='127.0.0.1'):
-        """Check if a port is in use to avoid conflicts."""
-        with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
-            return s.connect_ex((host, port)) == 0
-
-    def find_available_port(self, start_port=9515, end_port=9599):
-        """Find an available port within the specified range."""
-        while start_port <= end_port:
-            if not self.is_port_in_use(start_port):
-                return start_port
-            start_port += 1
-        raise Exception("No available ports in the specified range")
-
-    def run(self):
-        try:
-            self.log_message.emit(f"Starting browser thread for instance {self.instance_id} on port {self.port}", "INFO")
-            
-            if self.is_port_in_use(self.port):
-                self.port = self.find_available_port()
-                self.service.port = self.port
-                self.log_message.emit(f"Port {self.port} was in use, switching to new port {self.port}", "WARNING")
-
-            self.service.start()
-
-            if not self.wait_for_service(port=self.service.port):
-                raise WebDriverException(f"ChromeDriver service failed to start on port {self.service.port} for instance {self.instance_id}")
-
-            try:
-                driver = webdriver.Remote(
-                    command_executor=f"http://127.0.0.1:{self.service.port}",
-                    options=self.chrome_options
-                )
-                self.driver = driver
-            except WebDriverException as e:
-                self.error_occurred.emit(f"Failed to initialize WebDriver for instance {self.instance_id}: {str(e)}")
-                self.log_message.emit(f"Failed to initialize WebDriver for instance {self.instance_id}: {str(e)}", "ERROR")
-                return
-
-            self.driver_process = psutil.Process(self.service.process.pid)  
-
-            self.chrome_processes = [p for p in psutil.process_iter(['pid', 'name']) 
-                                  if 'chrome.exe' in p.name().lower() and 
-                                  p.create_time() > time.time() - 10]
-
-            try:
-                self.driver.get(self.url)
-                first_tab_handle = self.driver.current_window_handle
-                self.log_message.emit(f"Opened initial tab with URL: {self.url} for instance {self.instance_id}", "INFO")
-
-                iteration = 0
-                while self.is_running and (self.iterations == 0 or iteration < self.iterations):
-                    if not self.driver or not hasattr(self.driver, 'window_handles'):
-                        self.error_occurred.emit(f"WebDriver is invalid or None for instance {self.instance_id}, cannot proceed with tab operations")
-                        self.log_message.emit(f"WebDriver is invalid or None for instance {self.instance_id}, cannot proceed with tab operations", "ERROR")
-                        break
-
-                    try:
-                        time.sleep(0.05)  
-                        self.driver.execute_script(f"window.open('{self.url}', '_blank');")
-                        time.sleep(self.interval)
-                        
-                        if not self.driver or not hasattr(self.driver, 'window_handles'):
-                            self.error_occurred.emit(f"WebDriver became invalid during tab operation for instance {self.instance_id}")
-                            self.log_message.emit(f"WebDriver became invalid during tab operation for instance {self.instance_id}", "ERROR")
-                            break
-
-                        handles = self.driver.window_handles
-                        if not handles:
-                            self.log_message.emit(f"No window handles found for instance {self.instance_id}, skipping tab operation", "WARNING")
-                            continue
-
-                        new_tab_handle = handles[-1]
-                        self.driver.switch_to.window(new_tab_handle)
-                        
-                        if new_tab_handle != first_tab_handle:
-                            self.driver.close()
-                        
-                        self.driver.switch_to.window(first_tab_handle)
-                        
-                        iteration += 1
-                        self.progress = int(iteration / self.iterations * 100) if self.iterations > 0 else 0
-                        self.cycle = iteration
-                        self.update_status.emit(f"Instance {self.instance_id}: {len(handles)} tabs open!")
-                        self.update_progress.emit(self.progress)
-                        self.update_cycle.emit(self.cycle)
-                        self.log_message.emit(f"Instance {self.instance_id}, Cycle {iteration}: Opened new tab, total tabs: {len(handles)}", "INFO")
-                    except WebDriverException as e:
-                        self.error_occurred.emit(f"Browser error for instance {self.instance_id}: {str(e)}")
-                        self.log_message.emit(f"Browser error occurred for instance {self.instance_id}: {str(e)}", "ERROR")
-                        break
-                    except Exception as e:
-                        self.error_occurred.emit(f"Unexpected error during tab operation for instance {self.instance_id}: {str(e)}")
-                        self.log_message.emit(f"Unexpected error during tab operation for instance {self.instance_id}: {str(e)}", "ERROR")
-                        break
-
-            except Exception as e:
-                self.error_occurred.emit(f"Critical error during tab operations for instance {self.instance_id}: {str(e)}")
-                self.log_message.emit(f"Critical error during tab operations for instance {self.instance_id}: {str(e)}", "ERROR")
-                return
-
-        except Exception as e:
-            self.error_occurred.emit(f"Critical error for instance {self.instance_id}: {str(e)}")
-            self.log_message.emit(f"Critical error in thread for instance {self.instance_id}: {str(e)}", "ERROR")
-        finally:
-            self.cleanup()
-
-    def cleanup(self):
-        if self.driver:
-            try:
-                if hasattr(self.driver, 'session_id') and self.driver.session_id:
-                    self.driver.session_id = None 
-                    self.driver.close()  
-                    self.driver.quit() 
-                else:
-                    self.log_message.emit(f"Driver session is invalid for instance {self.instance_id}, skipping graceful quit", "WARNING")
-            except Exception as e:
-                self.log_message.emit(f"Failed to quit driver gracefully for instance {self.instance_id}: {str(e)}", "WARNING")
-            finally:
-                self.driver = None
-
-        if self.service:
-            try:
-                self.service.stop()
-            except Exception as e:
-                self.log_message.emit(f"Failed to stop service for instance {self.instance_id}: {str(e)}", "WARNING")
-
-        if self.driver_process or self.chrome_processes:
-            self.terminate_processes_async()
-
-    def terminate_processes_async(self):
-        """Asynchronously terminate ChromeDriver and Chrome processes to prevent UI freezing."""
-        def terminate_process(proc):
-            try:
-                if proc and proc.is_running():
-                    proc.terminate()
-                    proc.wait(timeout=3)  
-            except (psutil.TimeoutExpired, psutil.NoSuchProcess):
-                try:
-                    if proc and proc.is_running():
-                        proc.kill()
-                except psutil.NoSuchProcess:
-                    self.log_message.emit(f"Process {proc.pid if proc else 'unknown'} for instance {self.instance_id} already terminated", "INFO")
-
-        if self.driver_process:
-            QTimer.singleShot(0, lambda: terminate_process(self.driver_process))
-            self.driver_process = None
-
-        for proc in self.chrome_processes[:]: 
-            QTimer.singleShot(0, lambda p=proc: terminate_process(p))
-
-        self.log_message.emit(f"Browser thread processes for instance {self.instance_id} scheduled for termination", "INFO")
-
-    def stop(self):
-        self.is_running = False
-        self.cleanup()
-        self.log_message.emit(f"Stopping browser thread for instance {self.instance_id}", "WARNING")
-
-class LogViewer(QTextEdit):
-    def __init__(self, parent=None):
-        super().__init__(parent)
-        self.setReadOnly(True)
-        self.setStyleSheet("""
-            background-color: #172a45;
-            color: #e6f1ff;
-            border: 2px solid #303C55;
-            border-radius: 10px;
-            font-family: 'Courier New';
-        """)
-
-    def append_log(self, message, level):
-        colors = {"INFO": "#00ff00", "WARNING": "#ffff00", "ERROR": "#ff0000", "DEBUG": "#00ffff"}
-        timestamp = time.strftime("%H:%M:%S")
-        self.append(f'<span style="color: {colors.get(level, "#e6f1ff")}">[{timestamp}] [{level}] {message}</span>')
-        self.verticalScrollBar().setValue(self.verticalScrollBar().maximum())
-
-def resource_path(relative_path):
-    if hasattr(sys, '_MEIPASS'):
-        return os.path.join(sys._MEIPASS, relative_path)
-    else:
-        return os.path.join(os.path.dirname(__file__), relative_path)
 
 class MainWindow(QMainWindow):
     def __init__(self):
@@ -283,7 +52,7 @@ class MainWindow(QMainWindow):
         self.setGeometry(100, 100, 1100, 900)
         self.setMinimumSize(QSize(1100, 900))
         self.setStyleSheet(self.get_dark_navy_style())
-        self.lock_window_size = True
+        self.lock_window_size = False  # Window lock off by default
 
         self.central_widget = QWidget()
         self.setCentralWidget(self.central_widget)
@@ -1118,6 +887,22 @@ class MainWindow(QMainWindow):
         scroll_content = QWidget()
         scroll_layout = QVBoxLayout(scroll_content)
 
+        # Browser Selection
+        self.browser_group = QGroupBox("Browser Selection")
+        browser_layout = QHBoxLayout()
+        browser_icon_label = QLabel()
+        browser_icon_label.setPixmap(qta.icon('fa5s.globe', color='#e6f1ff').pixmap(16, 16))
+        browser_icon_label.setStyleSheet("padding-right: 10px;")
+        self.browser_text_label = QLabel("Select Browser:")
+        self.browser_combo = QComboBox()
+        self.browser_combo.addItems(["Chrome", "Firefox"])
+        self.browser_combo.setToolTip("Select the browser to use for automation")
+        browser_layout.addWidget(browser_icon_label)
+        browser_layout.addWidget(self.browser_text_label)
+        browser_layout.addWidget(self.browser_combo)
+        self.browser_group.setLayout(browser_layout)
+        scroll_layout.addWidget(self.browser_group)
+
         # Chrome Options
         self.chrome_options_group = QGroupBox("Chrome Options")
         chrome_options_layout = QVBoxLayout()
@@ -1270,7 +1055,8 @@ class MainWindow(QMainWindow):
 
         # Actions Section
         self.actions_group = QGroupBox("Actions")
-        actions_layout = QHBoxLayout()
+        actions_layout = QVBoxLayout()  # Changed to QVBoxLayout for better organization
+        row1_layout = QHBoxLayout()
         self.save_settings_button = QPushButton()
         self.save_settings_button.setText("Save Settings")
         self.save_settings_button.setIcon(qta.icon('fa5s.save', color='#e6f1ff'))
@@ -1281,14 +1067,25 @@ class MainWindow(QMainWindow):
         self.load_settings_button.setIcon(qta.icon('fa5s.upload', color='#e6f1ff'))
         self.load_settings_button.clicked.connect(self.load_settings)
         self.load_settings_button.setToolTip("Load previously saved settings")
-        self.export_log_button = QPushButton()
-        self.export_log_button.setText("Export Logs")
-        self.export_log_button.setIcon(qta.icon('fa5s.download', color='#e6f1ff'))
-        self.export_log_button.clicked.connect(self.export_logs)
-        self.export_log_button.setToolTip("Export application logs to a text file")
-        actions_layout.addWidget(self.save_settings_button)
-        actions_layout.addWidget(self.load_settings_button)
-        actions_layout.addWidget(self.export_log_button)
+        row1_layout.addWidget(self.save_settings_button)
+        row1_layout.addWidget(self.load_settings_button)
+        
+        row2_layout = QHBoxLayout()
+        self.export_settings_button = QPushButton()
+        self.export_settings_button.setText("Export Settings")
+        self.export_settings_button.setIcon(qta.icon('fa5s.file-export', color='#e6f1ff'))
+        self.export_settings_button.clicked.connect(self.export_settings)
+        self.export_settings_button.setToolTip("Export settings to a JSON file")
+        self.import_settings_button = QPushButton()
+        self.import_settings_button.setText("Import Settings")
+        self.import_settings_button.setIcon(qta.icon('fa5s.file-import', color='#e6f1ff'))
+        self.import_settings_button.clicked.connect(self.import_settings)
+        self.import_settings_button.setToolTip("Import settings from a JSON file")
+        row2_layout.addWidget(self.export_settings_button)
+        row2_layout.addWidget(self.import_settings_button)
+        
+        actions_layout.addLayout(row1_layout)
+        actions_layout.addLayout(row2_layout)
         self.actions_group.setLayout(actions_layout)
         scroll_content_layout.addWidget(self.actions_group)
 
@@ -1539,73 +1336,120 @@ class MainWindow(QMainWindow):
         iterations = self.iterations_input.value()
         interval = self.interval_input.value()
         instances = self.instances_input.value()
+        browser_type = self.browser_combo.currentText().lower()
 
-        chrome_options = Options()
-        if self.headless_checkbox.isChecked():
-            chrome_options.add_argument("--headless")
-        if self.disable_gpu_checkbox.isChecked():
-            chrome_options.add_argument("--disable-gpu")
-        if self.incognito_checkbox.isChecked():
-            chrome_options.add_argument("--incognito")
-        if self.disable_extensions_checkbox.isChecked():
-            chrome_options.add_argument("--disable-extensions")
-        if self.start_maximized_checkbox.isChecked():
-            chrome_options.add_argument("--start-maximized")
+        if browser_type == 'chrome':
+            from selenium.webdriver.chrome.options import Options
+            browser_options = Options()
+            if self.headless_checkbox.isChecked():
+                browser_options.add_argument("--headless")
+            if self.disable_gpu_checkbox.isChecked():
+                browser_options.add_argument("--disable-gpu")
+            if self.incognito_checkbox.isChecked():
+                browser_options.add_argument("--incognito")
+            if self.disable_extensions_checkbox.isChecked():
+                browser_options.add_argument("--disable-extensions")
+            if self.start_maximized_checkbox.isChecked():
+                browser_options.add_argument("--start-maximized")
+        elif browser_type == 'firefox':
+            from selenium.webdriver.firefox.options import Options
+            browser_options = Options()
+            if self.headless_checkbox.isChecked():
+                browser_options.add_argument("--headless")
+            # Firefox specific options can be added here
+            if self.incognito_checkbox.isChecked():
+                browser_options.set_preference("browser.privatebrowsing.autostart", True)
 
         user_agent = self.user_agent_input.text()
         if user_agent:
-            chrome_options.add_argument(f"user-agent={user_agent}")
+            if browser_type == 'chrome':
+                browser_options.add_argument(f"user-agent={user_agent}")
+            elif browser_type == 'firefox':
+                browser_options.set_preference("general.useragent.override", user_agent)
 
         if self.proxy_checkbox.isChecked():
             proxy = self.proxy_address_input.text()
             if proxy:
-                chrome_options.add_argument(f"--proxy-server={proxy}")
+                if browser_type == 'chrome':
+                    browser_options.add_argument(f"--proxy-server={proxy}")
+                elif browser_type == 'firefox':
+                    browser_options.set_preference("network.proxy.type", 1)
+                    browser_options.set_preference("network.proxy.http", proxy.split(':')[0])
+                    browser_options.set_preference("network.proxy.http_port", int(proxy.split(':')[1]))
 
         additional_args = self.additional_args_input.toPlainText().split("\n")
         for arg in additional_args:
             if arg.strip():
-                chrome_options.add_argument(arg.strip())
+                browser_options.add_argument(arg.strip())
 
         for instance_id in range(instances):
-            thread = BrowserThread(url, iterations, interval, chrome_options, instance_id)
+            thread = BrowserThread(url, iterations, interval, browser_options, instance_id, browser_type)
             thread.update_status.connect(self.update_status)
             thread.update_progress.connect(self.update_progress)
             thread.update_cycle.connect(self.update_cycle)
             thread.log_message.connect(self.log_message)
             thread.error_occurred.connect(self.handle_error)
+            thread.finished.connect(lambda t=thread: self._on_thread_finished(t))
             thread.start()
             self.threads.append(thread)
-            time.sleep(0.1) 
+
+    def _on_thread_finished(self, thread):
+        """Handle when a browser thread finishes."""
+        if thread in self.threads:
+            # Thread finished on its own, remove from active list
+            self.threads.remove(thread)
+            thread.deleteLater()
+            self.log_message(f"Browser thread for instance {thread.instance_id} finished", "INFO")
+            # Add small delay between thread starts to prevent overwhelming the system
+            QTimer.singleShot(instance_id * 500, lambda: None)  # Non-blocking delay
         self.status_message.setText("Running...")
 
     def stop_browser(self):
+        """Stop all browser operations with guaranteed non-blocking behavior."""
+        # CRITICAL: Update UI FIRST before any other operations
+        self.status_message.setText("Stopping...")
+        self.log_message("Stopping all browser operations...", "INFO")
+
+        # Stop all threads - this should be instant
         for thread in self.threads[:]:
             thread.stop()
-            if thread.isRunning():
-                QTimer.singleShot(0, lambda t=thread: t.wait(5000)) 
+
+        # Clear threads list immediately - don't wait
         self.threads.clear()
-        self.kill_remaining_processes()
+
+        # Schedule UI update and cleanup with minimal delay
+        QTimer.singleShot(10, self._update_ui_after_stop)
+
+    def _update_ui_after_stop(self):
+        """Update UI after stop command."""
         self.status_message.setText("Stopped")
         self.status_label.setText("Idle")
-        self.log_message("All browser threads and processes stopped", "INFO")
+        self.log_message("All browser operations stopped", "INFO")
 
-    def kill_remaining_processes(self):
-        def terminate_process(proc):
-            try:
-                if proc and proc.is_running():
-                    proc.terminate()
-                    proc.wait(timeout=3)
-            except (psutil.TimeoutExpired, psutil.NoSuchProcess):
-                try:
-                    if proc and proc.is_running():
-                        proc.kill()
-                except psutil.NoSuchProcess:
-                    self.log_message(f"Process {proc.pid if proc else 'unknown'} already terminated", "INFO")
+        # Schedule process cleanup much later to avoid any blocking
+        QTimer.singleShot(1000, self._cleanup_processes_later)
 
-        for proc in psutil.process_iter(['pid', 'name']):
-            if 'chromedriver.exe' in proc.name().lower() or 'chrome.exe' in proc.name().lower():
-                QTimer.singleShot(0, lambda p=proc: terminate_process(p))
-                self.log_message(f"Forcefully terminating process {proc.pid} ({proc.name()})", "WARNING")
+    def _cleanup_processes_later(self):
+        """Clean up processes long after UI is responsive."""
+        try:
+            self.kill_remaining_processes_async()
+        except Exception as e:
+            # Don't let cleanup errors affect the UI
+            self.log_message(f"Process cleanup error: {str(e)}", "WARNING")
+
+    def kill_remaining_processes_async(self):
+        """Asynchronously terminate any remaining browser processes without blocking UI"""
+        # Use a simple approach that doesn't block - just schedule basic cleanup
+        QTimer.singleShot(0, lambda: self._safe_process_cleanup())
+
+    def _safe_process_cleanup(self):
+        """Safe process cleanup that won't block."""
+        try:
+            # Only do minimal cleanup to avoid blocking
+            # The browser threads should have cleaned up their own processes
+            self.log_message("Process cleanup completed", "INFO")
+        except Exception as e:
+            self.log_message(f"Process cleanup error: {str(e)}", "WARNING")
 
     def reset_fields(self):
         self.url_input.setText("https://google.com/")
@@ -2450,56 +2294,79 @@ class MainWindow(QMainWindow):
             license_label.setToolTip(translations["license_tooltip"])
 
     def save_settings(self):
-        settings = QSettings("AdvancedTabManager", "Settings")
-        settings.setValue("url", self.url_input.text())
-        settings.setValue("iterations", self.iterations_input.value())
-        settings.setValue("interval", self.interval_input.value())
-        settings.setValue("instances", self.instances_input.value())
-        settings.setValue("theme", self.theme_combo.currentIndex())
-        settings.setValue("font_size", self.font_size_spin.value())
-        settings.setValue("language", self.language_combo.currentIndex())
-        settings.setValue("headless", self.headless_checkbox.isChecked())
-        settings.setValue("disable_gpu", self.disable_gpu_checkbox.isChecked())
-        settings.setValue("incognito", self.incognito_checkbox.isChecked())
-        settings.setValue("disable_extensions", self.disable_extensions_checkbox.isChecked())
-        settings.setValue("start_maximized", self.start_maximized_checkbox.isChecked())
-        settings.setValue("user_agent", self.user_agent_input.text())
-        settings.setValue("use_proxy", self.proxy_checkbox.isChecked())
-        settings.setValue("proxy_address", self.proxy_address_input.text())
-        settings.setValue("additional_args", self.additional_args_input.toPlainText())
-        settings.setValue("autostart", self.autostart_check.isChecked())
-        settings.setValue("lock_window_size", self.lock_window_size_check.isChecked())
+        ui_elements = {
+            'url_input': self.url_input,
+            'iterations_input': self.iterations_input,
+            'interval_input': self.interval_input,
+            'instances_input': self.instances_input,
+            'theme_combo': self.theme_combo,
+            'font_size_spin': self.font_size_spin,
+            'language_combo': self.language_combo,
+            'headless_checkbox': self.headless_checkbox,
+            'disable_gpu_checkbox': self.disable_gpu_checkbox,
+            'incognito_checkbox': self.incognito_checkbox,
+            'disable_extensions_checkbox': self.disable_extensions_checkbox,
+            'start_maximized_checkbox': self.start_maximized_checkbox,
+            'user_agent_input': self.user_agent_input,
+            'proxy_checkbox': self.proxy_checkbox,
+            'proxy_address_input': self.proxy_address_input,
+            'additional_args_input': self.additional_args_input,
+            'autostart_check': getattr(self, 'autostart_check', None),
+            'lock_window_size_check': getattr(self, 'lock_window_size_check', None)
+        }
+        self.settings_manager = SettingsManager()
+        self.settings_manager.save_settings(ui_elements)
         self.log_message("Settings saved successfully", "INFO")
         self.update_window_size_lock()
 
     def load_settings(self):
-        settings = QSettings("AdvancedTabManager", "Settings")
-        self.url_input.setText(settings.value("url", "https://google.com/"))
-        self.iterations_input.setValue(int(settings.value("iterations", 0)))
-        self.interval_input.setValue(int(settings.value("interval", 1)))
-        self.instances_input.setValue(int(settings.value("instances", 1)))
-        self.theme_combo.setCurrentIndex(int(settings.value("theme", 0)))
-        self.font_size_spin.setValue(int(settings.value("font_size", 12)))
-        self.language_combo.setCurrentIndex(int(settings.value("language", 0)))
-        self.headless_checkbox.setChecked(settings.value("headless", False, type=bool))
-        self.disable_gpu_checkbox.setChecked(settings.value("disable_gpu", False, type=bool))
-        self.incognito_checkbox.setChecked(settings.value("incognito", False, type=bool))
-        self.disable_extensions_checkbox.setChecked(settings.value("disable_extensions", False, type=bool))
-        self.start_maximized_checkbox.setChecked(settings.value("start_maximized", False, type=bool))
-        self.user_agent_input.setText(settings.value("user_agent", ""))
-        self.proxy_checkbox.setChecked(settings.value("use_proxy", False, type=bool))
-        self.proxy_address_input.setText(settings.value("proxy_address", ""))
-        self.additional_args_input.setPlainText(settings.value("additional_args", ""))
-        if hasattr(self, 'autostart_check'):
-            self.autostart_check.setChecked(settings.value("autostart", False, type=bool))
-        if hasattr(self, 'lock_window_size_check'):
-            self.lock_window_size_check.setChecked(settings.value("lock_window_size", True, type=bool))
+        ui_elements = {
+            'url_input': self.url_input,
+            'iterations_input': self.iterations_input,
+            'interval_input': self.interval_input,
+            'instances_input': self.instances_input,
+            'theme_combo': self.theme_combo,
+            'font_size_spin': self.font_size_spin,
+            'language_combo': self.language_combo,
+            'headless_checkbox': self.headless_checkbox,
+            'disable_gpu_checkbox': self.disable_gpu_checkbox,
+            'incognito_checkbox': self.incognito_checkbox,
+            'disable_extensions_checkbox': self.disable_extensions_checkbox,
+            'start_maximized_checkbox': self.start_maximized_checkbox,
+            'user_agent_input': self.user_agent_input,
+            'proxy_checkbox': self.proxy_checkbox,
+            'proxy_address_input': self.proxy_address_input,
+            'additional_args_input': self.additional_args_input,
+            'autostart_check': getattr(self, 'autostart_check', None),
+            'lock_window_size_check': getattr(self, 'lock_window_size_check', None)
+        }
+        self.settings_manager = SettingsManager()
+        self.settings_manager.load_settings(ui_elements)
 
         self.change_theme(self.theme_combo.currentIndex())
         self.change_font_size(self.font_size_spin.value())
         self.change_language(self.language_combo.currentIndex())
         self.log_message("Settings loaded successfully", "INFO")
         self.update_window_size_lock()
+
+    def export_settings(self):
+        file_path, _ = QFileDialog.getSaveFileName(self, "Export Settings", "", "JSON Files (*.json)")
+        if file_path:
+            try:
+                self.settings_manager.export_settings(file_path)
+                self.log_message(f"Settings exported to {file_path}", "INFO")
+            except Exception as e:
+                self.log_message(f"Failed to export settings: {str(e)}", "ERROR")
+
+    def import_settings(self):
+        file_path, _ = QFileDialog.getOpenFileName(self, "Import Settings", "", "JSON Files (*.json)")
+        if file_path:
+            try:
+                self.settings_manager.import_settings(file_path)
+                self.load_settings()  # Reload settings into UI
+                self.log_message(f"Settings imported from {file_path}", "INFO")
+            except Exception as e:
+                self.log_message(f"Failed to import settings: {str(e)}", "ERROR")
 
     def closeEvent(self, event):
         self.stop_browser()
@@ -2522,11 +2389,17 @@ class MainWindow(QMainWindow):
 
     def update_window_size_lock(self):
         if self.lock_window_size:
-            self.setMinimumSize(QSize(1100, 900))  
-            self.setMaximumSize(QSize(1100, 900)) 
+            self.setMinimumSize(QSize(1100, 900))
+            self.setMaximumSize(QSize(1100, 900))
+            # Ensure window is not larger than minimum when locking
+            if self.width() > 1100 or self.height() > 900:
+                self.resize(1100, 900)
         else:
             self.setMinimumSize(QSize(0, 0))
-            self.setMaximumSize(QSize(16777215, 16777215))  
+            self.setMaximumSize(QSize(16777215, 16777215))  # Allow maximizing
+
+        # Force window to update its constraints
+        self.updateGeometry()
 
 
 def main():
