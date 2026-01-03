@@ -19,7 +19,7 @@ class BrowserThread(QThread):
     log_message = pyqtSignal(str, str)
     error_occurred = pyqtSignal(str)
 
-    def __init__(self, url, iterations, interval, browser_options, instance_id, browser_type='chrome'):
+    def __init__(self, url, iterations, interval, browser_options, instance_id, browser_type='chrome', translations=None):
         super().__init__()
         self.url = url
         self.iterations = iterations
@@ -33,6 +33,7 @@ class BrowserThread(QThread):
         self.driver_process = None
         self.browser_processes = []  # Will contain only specific processes we create
         self.instance_id = instance_id
+        self.translations = translations or {}
         self.progress = 0
         self.cycle = 0
         self.stop_requested = False  # Flag to prevent error emissions during stop
@@ -54,7 +55,7 @@ class BrowserThread(QThread):
             return False
 
         try:
-            self.log_message.emit(f"Attempting to reinitialize WebDriver for instance {self.instance_id}", "WARNING")
+            self.log_message.emit(self.translations.get("log_reinitialize_attempt", "Attempting to reinitialize WebDriver for instance {instance_id}").format(instance_id=self.instance_id), "WARNING")
 
             # Clean up existing driver if any
             if self.driver:
@@ -97,11 +98,11 @@ class BrowserThread(QThread):
             self.driver = driver
             self.driver.get(self.url)  # Reopen initial tab
 
-            self.log_message.emit(f"Successfully reinitialized WebDriver for instance {self.instance_id}", "INFO")
+            self.log_message.emit(self.translations.get("log_reinitialize_success", "Successfully reinitialized WebDriver for instance {instance_id}").format(instance_id=self.instance_id), "INFO")
             return True
 
         except Exception as e:
-            self.log_message.emit(f"Failed to reinitialize WebDriver for instance {self.instance_id}: {str(e)}", "ERROR")
+            self.log_message.emit(self.translations.get("log_reinitialize_failed", "Failed to reinitialize WebDriver for instance {instance_id}: {error}").format(instance_id=self.instance_id, error=str(e)), "ERROR")
             return False
 
     def wait_for_service(self, host='127.0.0.1', port=0, timeout=10):
@@ -142,7 +143,7 @@ class BrowserThread(QThread):
             if startup_delay > 0:
                 time.sleep(startup_delay)
 
-            self.log_message.emit(f"Starting browser thread for instance {self.instance_id} on port {self.port}", "INFO")
+            self.log_message.emit(self.translations.get("log_browser_thread_start", "Starting browser thread for instance {instance_id} on port {port}").format(instance_id=self.instance_id, port=self.port), "INFO")
 
             # Create service in background thread to avoid blocking UI
             if self.browser_type == 'chrome':
@@ -155,7 +156,7 @@ class BrowserThread(QThread):
             if self.is_port_in_use(self.port):
                 self.port = self.find_available_port()
                 self.service.port = self.port
-                self.log_message.emit(f"Port {self.port} was in use, switching to new port {self.port}", "WARNING")
+                self.log_message.emit(self.translations.get("log_port_in_use", "Port {old_port} was in use, switching to new port {new_port}").format(old_port=self.port, new_port=self.port), "WARNING")
 
             self.service.start()
 
@@ -178,20 +179,20 @@ class BrowserThread(QThread):
                 error_msg = str(e).lower()
                 # Provide more specific error messages for common issues
                 if "chrome instance exited" in error_msg:
-                    self.log_message.emit(f"Chrome browser instance exited immediately. This usually indicates:", "ERROR")
-                    self.log_message.emit(f"  - Chrome binary not found at: {getattr(self.browser_options, 'binary_location', 'Not set')}", "ERROR")
-                    self.log_message.emit(f"  - Chrome version incompatible with ChromeDriver", "ERROR")
-                    self.log_message.emit(f"  - Conflicting Chrome command line arguments", "ERROR")
-                    self.log_message.emit(f"  - Chrome already running with conflicting profile", "ERROR")
+                    self.log_message.emit(self.translations.get("log_browser_exited_immediately", "Chrome browser instance exited immediately. This usually indicates:"), "ERROR")
+                    self.log_message.emit(self.translations.get("log_chrome_binary_not_found_error", "  - Chrome binary not found at: {binary}").format(binary=getattr(self.browser_options, 'binary_location', 'Not set')), "ERROR")
+                    self.log_message.emit(self.translations.get("log_chrome_version_incompatible", "  - Chrome version incompatible with ChromeDriver"), "ERROR")
+                    self.log_message.emit(self.translations.get("log_conflicting_arguments", "  - Conflicting Chrome command line arguments"), "ERROR")
+                    self.log_message.emit(self.translations.get("log_conflicting_profile", "  - Chrome already running with conflicting profile"), "ERROR")
                 elif "session not created" in error_msg:
-                    self.log_message.emit(f"WebDriver session creation failed. Check browser version compatibility.", "ERROR")
+                    self.log_message.emit(self.translations.get("log_session_creation_failed", "WebDriver session creation failed. Check browser version compatibility."), "ERROR")
                 elif "executable needs to be in path" in error_msg:
-                    self.log_message.emit(f"Browser executable not found in PATH or specified location.", "ERROR")
+                    self.log_message.emit(self.translations.get("log_executable_not_found", "Browser executable not found in PATH or specified location."), "ERROR")
                 else:
-                    self.log_message.emit(f"WebDriver initialization error: {str(e)}", "ERROR")
+                    self.log_message.emit(self.translations.get("log_webdriver_init_error", "WebDriver initialization error: {error}").format(error=str(e)), "ERROR")
                 
                 self.error_occurred.emit(f"Failed to initialize WebDriver for instance {self.instance_id}: {str(e)}")
-                self.log_message.emit(f"Failed to initialize WebDriver for instance {self.instance_id}: {str(e)}", "ERROR")
+                self.log_message.emit(self.translations.get("log_failed_init_webdriver", "Failed to initialize WebDriver for instance {instance_id}: {error}").format(instance_id=self.instance_id, error=str(e)), "ERROR")
                 return
 
             self.driver_process = psutil.Process(self.service.process.pid)
@@ -223,13 +224,13 @@ class BrowserThread(QThread):
                 else:
                     self.browser_processes = []
             except Exception as e:
-                self.log_message.emit(f"Could not track browser process for instance {self.instance_id}: {str(e)}", "WARNING")
+                self.log_message.emit(self.translations.get("log_cannot_track_process", "Could not track browser process for instance {instance_id}: {error}").format(instance_id=self.instance_id, error=str(e)), "WARNING")
                 self.browser_processes = []
 
             try:
                 self.driver.get(self.url)
                 first_tab_handle = self.driver.current_window_handle
-                self.log_message.emit(f"Opened initial tab with URL: {self.url} for instance {self.instance_id}", "INFO")
+                self.log_message.emit(self.translations.get("log_opened_initial_tab", "Opened initial tab with URL: {url} for instance {instance_id}").format(url=self.url, instance_id=self.instance_id), "INFO")
 
                 iteration = 0
                 consecutive_errors = 0  # Track consecutive errors for performance optimization
@@ -240,7 +241,7 @@ class BrowserThread(QThread):
 
                     if not self.is_driver_valid():
                         self.error_occurred.emit(f"WebDriver is invalid or None for instance {self.instance_id}, cannot proceed with tab operations")
-                        self.log_message.emit(f"WebDriver is invalid or None for instance {self.instance_id}, cannot proceed with tab operations", "ERROR")
+                        self.log_message.emit(self.translations.get("log_webdriver_invalid", "WebDriver is invalid or None for instance {instance_id}, cannot proceed with tab operations").format(instance_id=self.instance_id), "ERROR")
                         break
 
                     try:
@@ -256,7 +257,7 @@ class BrowserThread(QThread):
                         if not self.is_driver_valid():
                             if not self.stop_requested:
                                 self.error_occurred.emit(f"WebDriver became invalid before script execution for instance {self.instance_id}")
-                                self.log_message.emit(f"WebDriver became invalid before script execution for instance {self.instance_id}", "ERROR")
+                                self.log_message.emit(self.translations.get("log_webdriver_invalid_before_script", "WebDriver became invalid before script execution for instance {instance_id}").format(instance_id=self.instance_id), "ERROR")
                             # Try to reinitialize driver
                             if self._try_reinitialize_driver():
                                 continue  # Skip this iteration and try again
@@ -269,7 +270,7 @@ class BrowserThread(QThread):
                         if not self.is_driver_valid():
                             if not self.stop_requested:
                                 self.error_occurred.emit(f"WebDriver became invalid after script execution for instance {self.instance_id}")
-                                self.log_message.emit(f"WebDriver became invalid after script execution for instance {self.instance_id}", "ERROR")
+                                self.log_message.emit(self.translations.get("log_webdriver_invalid_after_script", "WebDriver became invalid after script execution for instance {instance_id}").format(instance_id=self.instance_id), "ERROR")
                             # Try to reinitialize driver
                             if self._try_reinitialize_driver():
                                 continue  # Skip this iteration and try again
@@ -278,7 +279,7 @@ class BrowserThread(QThread):
 
                         handles = self.driver.window_handles
                         if not handles:
-                            self.log_message.emit(f"No window handles found for instance {self.instance_id}, skipping tab operation", "WARNING")
+                            self.log_message.emit(self.translations.get("log_no_window_handles", "No window handles found for instance {instance_id}, skipping tab operation").format(instance_id=self.instance_id), "WARNING")
                             continue
 
                         new_tab_handle = handles[-1]
@@ -295,7 +296,7 @@ class BrowserThread(QThread):
                             suppress_keywords = ['browsing context has been discarded', 'session does not exist', 'invalid session', 'marionette', 'no such window']
                             should_suppress = any(keyword in error_msg for keyword in suppress_keywords)
                             if not should_suppress and not self.stop_requested:
-                                self.log_message.emit(f"Timeout waiting for page to load in instance {self.instance_id}: {str(e)}", "WARNING")
+                                self.log_message.emit(self.translations.get("log_timeout_waiting_page_load", "Timeout waiting for page to load in instance {instance_id}: {error}").format(instance_id=self.instance_id, error=str(e)), "WARNING")
 
                         if new_tab_handle != first_tab_handle:
                             # Double-check driver is still valid before closing tab

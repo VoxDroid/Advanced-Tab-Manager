@@ -108,6 +108,15 @@ class MainWindow(QMainWindow):
         self.tab_widget = QTabWidget()
         self.layout.addWidget(self.tab_widget)
 
+        # Load English translations before creating UI to prevent NameError
+        try:
+            # Import English translations directly to avoid recursion
+            from .translations import en
+            self.translations = en.translations  # Set translations for log messages
+        except ImportError:
+            # Fallback if English translations can't be loaded
+            self.translations = {}
+
         self.create_main_tab()
         self.create_advanced_tab()
         self.create_settings_tab()
@@ -118,6 +127,10 @@ class MainWindow(QMainWindow):
         self.setup_status_bar()
         self.threads = []
         self.proxy_test_thread = None
+        
+        # Update UI text with English translations
+        self.update_ui_text(self.translations)
+        
         self.load_settings()
 
         logging.basicConfig(level=logging.INFO)
@@ -202,10 +215,18 @@ class MainWindow(QMainWindow):
             except:
                 translations = {}
         
+        # Translate the error message
+        translated_message = error_message
+        if error_message == "No internet connection. Update check failed.":
+            translated_message = translations.get("update_check_no_internet", error_message)
+        elif error_message.startswith("Failed to check for updates: "):
+            error_part = error_message.split(": ", 1)[1]
+            translated_message = translations.get("update_check_failed", "Failed to check for updates: {error}").format(error=error_part)
+        
         msg = QMessageBox(self)
         msg.setWindowTitle(translations.get("update_check_failed_title", "Update Check Failed"))
         msg.setText(translations.get("update_check_failed_text", "Unable to check for updates."))
-        msg.setInformativeText(error_message)
+        msg.setInformativeText(translated_message)
         msg.setStandardButtons(QMessageBox.StandardButton.Ok)
         msg.exec()
 
@@ -1001,7 +1022,7 @@ class MainWindow(QMainWindow):
         browser_icon_label.setStyleSheet("padding-right: 10px;")
         self.browser_text_label = QLabel("Select Browser:")
         self.browser_combo = QComboBox()
-        self.browser_combo.addItems(["Chrome", "Firefox"])
+        self.browser_combo.addItems([])  # Will be populated in update_ui_text
         self.browser_combo.setToolTip("Select the browser to use for automation")
         self.browser_combo.setAttribute(Qt.WidgetAttribute.WA_AlwaysShowToolTips, True)
         browser_layout.addWidget(browser_icon_label)
@@ -1148,7 +1169,7 @@ class MainWindow(QMainWindow):
         theme_icon_label.setStyleSheet("padding-right: 10px;")
         self.theme_text_label = QLabel("Theme:")
         self.theme_combo = QComboBox()
-        self.theme_combo.addItems(["Dark Navy", "Light Blue", "Dark Green", "Light Green", "Soft Pink", "Soft Lavender"])
+        self.theme_combo.addItems([])  # Will be populated in update_ui_text
         self.theme_combo.currentIndexChanged.connect(self.change_theme)
         self.theme_combo.setToolTip("Select the visual theme for the application")
         self.theme_combo.setAttribute(Qt.WidgetAttribute.WA_AlwaysShowToolTips, True)
@@ -1185,7 +1206,7 @@ class MainWindow(QMainWindow):
         language_icon_label.setStyleSheet("padding-right: 10px;")
         self.language_text_label = QLabel("Language:")
         self.language_combo = QComboBox()
-        self.language_combo.addItems(["English", "Japanese", "Korean", "Chinese", "Filipino"])
+        self.language_combo.addItems([])  # Will be populated in update_ui_text
         self.language_combo.currentIndexChanged.connect(self.change_language)
         self.language_combo.setToolTip("Select the language for the application interface")
         self.language_combo.setAttribute(Qt.WidgetAttribute.WA_AlwaysShowToolTips, True)
@@ -1282,42 +1303,42 @@ class MainWindow(QMainWindow):
         scroll_content = QWidget()
         scroll_content_layout = QVBoxLayout(scroll_content)
 
-        self.system_group = QGroupBox("System Information")
+        self.system_group = QGroupBox(self.translations.get("system_group", "System Information"))
         system_layout_inner = QHBoxLayout()
         system_icon_label = QLabel()
         system_icon_label.setPixmap(qta.icon('fa5s.info-circle', color='#e6f1ff').pixmap(16, 16))
         system_icon_label.setStyleSheet("padding-right: 10px;")
-        self.system_text_label = QLabel("System Details:")
+        self.system_text_label = QLabel(self.translations["system_details"])
         self.system_text_label.setStyleSheet("font-weight: bold;")
 
         system_info = f"""
-        OS: {platform.system()} {platform.release()}
-        Python Version: {platform.python_version()}
-        CPU: {platform.processor()}
-        CPU Cores: {psutil.cpu_count(logical=True)} (Physical: {psutil.cpu_count(logical=False)})
-        Memory: {psutil.virtual_memory().total / (1024**3):.2f} GB
-        Disk Space: {psutil.disk_usage('/').total / (1024**3):.2f} GB total
-        CPU Usage: {psutil.cpu_percent()}%
-        Memory Usage: {psutil.virtual_memory().percent}%
+        {self.translations["system_info_os"]} {platform.system()} {platform.release()}
+        {self.translations["system_info_python_version"]} {platform.python_version()}
+        {self.translations["system_info_cpu"]} {platform.processor()}
+        {self.translations["system_info_cpu_cores"]} {psutil.cpu_count(logical=True)} (Physical: {psutil.cpu_count(logical=False)})
+        {self.translations["system_info_memory"]} {psutil.virtual_memory().total / (1024**3):.2f} GB
+        {self.translations["system_info_disk_space"]} {psutil.disk_usage('/').total / (1024**3):.2f} GB total
+        {self.translations["system_info_cpu_usage"]} {psutil.cpu_percent()}%
+        {self.translations["system_info_memory_usage"]} {psutil.virtual_memory().percent}%
         """
-        system_label = QLabel(system_info)
-        system_label.setWordWrap(True)
-        system_label.setToolTip("View detailed information about the system")
+        self.system_info_label = QLabel(system_info)
+        self.system_info_label.setWordWrap(True)
+        self.system_info_label.setToolTip(self.translations.get("system_details_tooltip", "View detailed information about the system"))
         system_layout_inner.addWidget(system_icon_label)
         system_layout_inner.addWidget(self.system_text_label)
-        system_layout_inner.addWidget(system_label)
+        system_layout_inner.addWidget(self.system_info_label)
         self.system_group.setLayout(system_layout_inner)
         scroll_content_layout.addWidget(self.system_group)
 
         # Real-time System Monitor
-        self.monitor_group = QGroupBox("Real-time System Monitor")
+        self.monitor_group = QGroupBox(self.translations.get("monitor_group", "Real-time System Monitor"))
         monitor_layout = QVBoxLayout()
-        self.cpu_usage_label = QLabel("CPU Usage: 0%")
-        self.cpu_usage_label.setToolTip("View real-time CPU usage percentage")
-        self.memory_usage_label = QLabel("Memory Usage: 0%")
-        self.memory_usage_label.setToolTip("View real-time memory usage percentage")
-        self.disk_usage_label = QLabel("Disk Usage: 0%")
-        self.disk_usage_label.setToolTip("View real-time disk usage percentage")
+        self.cpu_usage_label = QLabel(self.translations.get("system_cpu_usage", "CPU Usage:") + " 0%")
+        self.cpu_usage_label.setToolTip(self.translations.get("system_cpu_usage_tooltip", "View real-time CPU usage percentage"))
+        self.memory_usage_label = QLabel(self.translations.get("system_memory_usage", "Memory Usage:") + " 0%")
+        self.memory_usage_label.setToolTip(self.translations.get("system_memory_usage_tooltip", "View real-time memory usage percentage"))
+        self.disk_usage_label = QLabel(self.translations.get("system_disk_usage", "Disk Usage:") + " 0%")
+        self.disk_usage_label.setToolTip(self.translations.get("system_disk_usage_tooltip", "View real-time disk usage percentage"))
         monitor_layout.addWidget(self.cpu_usage_label)
         monitor_layout.addWidget(self.memory_usage_label)
         monitor_layout.addWidget(self.disk_usage_label)
@@ -1327,7 +1348,7 @@ class MainWindow(QMainWindow):
         scroll_area.setWidget(scroll_content)
         system_layout.addWidget(scroll_area)
 
-        self.tab_widget.addTab(system_tab, "System")
+        self.tab_widget.addTab(system_tab, self.translations["tab_system"])
 
         # Start real-time monitoring
         self.system_monitor_timer = QTimer()
@@ -1343,12 +1364,12 @@ class MainWindow(QMainWindow):
         scroll_content = QWidget()
         scroll_content_layout = QVBoxLayout(scroll_content)
 
-        self.logs_group = QGroupBox("Application Logs")
+        self.logs_group = QGroupBox(self.translations.get("logs_group", "Application Logs"))
         logs_layout_inner = QVBoxLayout()
         logs_icon_label = QLabel()
         logs_icon_label.setPixmap(qta.icon('fa5s.list-alt', color='#e6f1ff').pixmap(16, 16))
         logs_icon_label.setStyleSheet("padding-right: 10px;")
-        self.logs_text_label = QLabel("Logs:")
+        self.logs_text_label = QLabel(self.translations.get("logs", "Logs:"))
         self.logs_text_label.setStyleSheet("font-weight: bold;")
 
         self.log_viewer = LogViewer()
@@ -1359,23 +1380,23 @@ class MainWindow(QMainWindow):
         scroll_content_layout.addWidget(self.logs_group)
 
         # Log Filters
-        self.filter_group = QGroupBox("Log Filters")
+        self.filter_group = QGroupBox(self.translations.get("filter_group", "Log Filters"))
         filter_layout = QHBoxLayout()
         self.show_info_check = QCheckBox()
-        self.show_info_check.setText("Show Info")
+        self.show_info_check.setText(self.translations.get("logs_show_info", "Show Info"))
         self.show_info_check.setIcon(qta.icon('fa5s.info-circle', color='#e6f1ff'))
         self.show_info_check.setChecked(True)
-        self.show_info_check.setToolTip("Show informational log messages")
+        self.show_info_check.setToolTip(self.translations.get("logs_show_info_tooltip", "Show informational log messages"))
         self.show_warning_check = QCheckBox()
-        self.show_warning_check.setText("Show Warnings")
+        self.show_warning_check.setText(self.translations.get("logs_show_warning", "Show Warnings"))
         self.show_warning_check.setIcon(qta.icon('fa5s.exclamation-triangle', color='#e6f1ff'))
         self.show_warning_check.setChecked(True)
-        self.show_warning_check.setToolTip("Show warning log messages")
+        self.show_warning_check.setToolTip(self.translations.get("logs_show_warning_tooltip", "Show warning log messages"))
         self.show_error_check = QCheckBox()
-        self.show_error_check.setText("Show Errors")
+        self.show_error_check.setText(self.translations.get("logs_show_error", "Show Errors"))
         self.show_error_check.setIcon(qta.icon('fa5s.times-circle', color='#e6f1ff'))
         self.show_error_check.setChecked(True)
-        self.show_error_check.setToolTip("Show error log messages")
+        self.show_error_check.setToolTip(self.translations.get("logs_show_error_tooltip", "Show error log messages"))
         filter_layout.addWidget(self.show_info_check)
         filter_layout.addWidget(self.show_warning_check)
         filter_layout.addWidget(self.show_error_check)
@@ -1383,18 +1404,18 @@ class MainWindow(QMainWindow):
         scroll_content_layout.addWidget(self.filter_group)
 
         # Log Actions
-        self.actions_group_logs = QGroupBox("Log Actions")
+        self.actions_group_logs = QGroupBox(self.translations.get("actions_group_logs", "Log Actions"))
         actions_layout = QHBoxLayout()
         self.clear_logs_button = QPushButton()
-        self.clear_logs_button.setText("Clear Logs")
+        self.clear_logs_button.setText(self.translations.get("clear_logs", "Clear Logs"))
         self.clear_logs_button.setIcon(qta.icon('fa5s.eraser', color='#e6f1ff'))
         self.clear_logs_button.clicked.connect(self.clear_logs)
-        self.clear_logs_button.setToolTip("Clear all log messages")
+        self.clear_logs_button.setToolTip(self.translations.get("clear_logs_tooltip", "Clear all log messages"))
         self.export_log_button = QPushButton()
-        self.export_log_button.setText("Export Logs")
+        self.export_log_button.setText(self.translations.get("export_logs", "Export Logs"))
         self.export_log_button.setIcon(qta.icon('fa5s.download', color='#e6f1ff'))
         self.export_log_button.clicked.connect(self.export_logs)
-        self.export_log_button.setToolTip("Export logs to a text file")
+        self.export_log_button.setToolTip(self.translations.get("export_logs_tooltip", "Export logs to a text file"))
         actions_layout.addWidget(self.clear_logs_button)
         actions_layout.addWidget(self.export_log_button)
         self.actions_group_logs.setLayout(actions_layout)
@@ -1468,16 +1489,16 @@ class MainWindow(QMainWindow):
     def setup_status_bar(self):
         status_bar = QStatusBar()
         self.setStatusBar(status_bar)
-        self.status_message = QLabel("Ready")
+        self.status_message = QLabel("Ready")  # Will be updated in update_ui_text
         self.status_message.setStyleSheet("color: #e6f1ff; font-size: 14px;")
         status_bar.addWidget(self.status_message)
-        dev_info = QLabel(f"Developed by: VoxDroid | GitHub: github.com/VoxDroid | Version: {CURRENT_VERSION}")
+        dev_info = QLabel(f"Developed by: VoxDroid | GitHub: github.com/VoxDroid | Version: {CURRENT_VERSION}")  # Will be updated in update_ui_text
         dev_info.setStyleSheet("color: #e6f1ff; font-size: 14px;")
         status_bar.addPermanentWidget(dev_info)
 
     def start_browser(self):
         if not self.url_input.text().strip():
-            self.log_message("Please enter a valid URL!", "ERROR")
+            self.log_message(self.translations.get("log_please_enter_valid_url", "Please enter a valid URL!"), "ERROR")
             return
 
         url = self.url_input.text()
@@ -1511,18 +1532,18 @@ class MainWindow(QMainWindow):
             for path in chrome_paths:
                 if os.path.exists(path):
                     browser_options.binary_location = path
-                    self.log_message(f"Found Chrome binary at: {path}", "DEBUG")
+                    self.log_message(self.translations.get("log_chrome_binary_found", "Found Chrome binary at: {path}").format(path=path), "DEBUG")
                     break
             else:
-                self.log_message(f"Chrome binary not found in standard locations. Chrome paths checked: {chrome_paths}", "WARNING")
+                self.log_message(self.translations.get("log_chrome_binary_not_found", "Chrome binary not found in standard locations. Chrome paths checked: {chrome_paths}").format(chrome_paths=chrome_paths), "WARNING")
                 # Try to find Chrome in PATH as fallback
                 import shutil
                 chrome_in_path = shutil.which("chrome") or shutil.which("google-chrome") or shutil.which("chromium")
                 if chrome_in_path:
                     browser_options.binary_location = chrome_in_path
-                    self.log_message(f"Found Chrome in PATH: {chrome_in_path}", "DEBUG")
+                    self.log_message(self.translations.get("log_chrome_in_path", "Found Chrome in PATH: {chrome_in_path}").format(chrome_in_path=chrome_in_path), "DEBUG")
                 else:
-                    self.log_message("Chrome binary not found. WebDriver may fail to start.", "WARNING")
+                    self.log_message(self.translations.get("log_chrome_not_in_path", "Chrome binary not found. WebDriver may fail to start."), "WARNING")
             if self.headless_checkbox.isChecked():
                 browser_options.add_argument("--headless=new")  # Use new headless implementation (Chrome 109+)
             if self.disable_gpu_checkbox.isChecked():
@@ -1603,14 +1624,14 @@ class MainWindow(QMainWindow):
             # disable_web_security, no_sandbox, disable_dev_shm are Chrome-specific
 
         # Debug logging for browser options
-        self.log_message(f"Browser: {browser_type}, Binary: {getattr(browser_options, 'binary_location', 'Not set')}", "DEBUG")
+        self.log_message(self.translations.get("log_browser_info", "Browser: {browser_type}, Binary: {binary}").format(browser_type=browser_type, binary=getattr(browser_options, 'binary_location', 'Not set')), "DEBUG")
         if hasattr(browser_options, 'arguments'):
-            self.log_message(f"Browser arguments: {browser_options.arguments}", "DEBUG")
+            self.log_message(self.translations.get("log_browser_arguments", "Browser arguments: {arguments}").format(arguments=browser_options.arguments), "DEBUG")
         elif hasattr(browser_options, '_arguments'):
-            self.log_message(f"Browser arguments: {browser_options._arguments}", "DEBUG")
+            self.log_message(self.translations.get("log_browser_arguments", "Browser arguments: {arguments}").format(arguments=browser_options._arguments), "DEBUG")
 
         for instance_id in range(instances):
-            thread = BrowserThread(url, iterations, interval, browser_options, instance_id, browser_type)
+            thread = BrowserThread(url, iterations, interval, browser_options, instance_id, browser_type, self.translations)
             thread.update_status.connect(self.update_status)
             thread.update_progress.connect(self.update_progress)
             thread.update_cycle.connect(self.update_cycle)
@@ -1626,7 +1647,7 @@ class MainWindow(QMainWindow):
             # Thread finished on its own, remove from active list
             self.threads.remove(thread)
             thread.deleteLater()
-            self.log_message(f"Browser thread for instance {thread.instance_id} finished", "INFO")
+            self.log_message(self.translations.get("log_browser_thread_finished", "Browser thread for instance {instance_id} finished").format(instance_id=thread.instance_id), "INFO")
             # Add small delay between thread starts to prevent overwhelming the system
             QTimer.singleShot(thread.instance_id * 500, lambda: None)  # Non-blocking delay
         self.status_message.setText("Running...")
@@ -1635,7 +1656,7 @@ class MainWindow(QMainWindow):
         """Stop all browser operations with guaranteed non-blocking behavior."""
         # CRITICAL: Update UI FIRST before any other operations
         self.status_message.setText("Stopping...")
-        self.log_message("Stopping all browser operations...", "INFO")
+        self.log_message(self.translations.get("log_stopping_operations", "Stopping all browser operations..."), "INFO")
 
         # Stop all threads - this should be instant
         for thread in self.threads[:]:
@@ -1651,7 +1672,7 @@ class MainWindow(QMainWindow):
         """Update UI after stop command."""
         self.status_message.setText("Stopped")
         self.status_label.setText("Idle")
-        self.log_message("All browser operations stopped", "INFO")
+        self.log_message(self.translations.get("log_operations_stopped", "All browser operations stopped"), "INFO")
 
         # Schedule process cleanup much later to avoid any blocking
         QTimer.singleShot(1000, self._cleanup_processes_later)
@@ -1662,7 +1683,7 @@ class MainWindow(QMainWindow):
             self.kill_remaining_processes_async()
         except Exception as e:
             # Don't let cleanup errors affect the UI
-            self.log_message(f"Process cleanup error: {str(e)}", "WARNING")
+            self.log_message(self.translations.get("log_process_cleanup_error", "Process cleanup error: {error}").format(error=str(e)), "WARNING")
 
     def kill_remaining_processes_async(self):
         """Asynchronously terminate any remaining browser processes without blocking UI"""
@@ -1674,9 +1695,9 @@ class MainWindow(QMainWindow):
         try:
             # Only do minimal cleanup to avoid blocking
             # The browser threads should have cleaned up their own processes
-            self.log_message("Process cleanup completed", "INFO")
+            self.log_message(self.translations.get("log_process_cleanup_completed", "Process cleanup completed"), "INFO")
         except Exception as e:
-            self.log_message(f"Process cleanup error: {str(e)}", "WARNING")
+            self.log_message(self.translations.get("log_process_cleanup_error", "Process cleanup error: {error}").format(error=str(e)), "WARNING")
 
     def test_proxy_connection(self):
         """Test the proxy connection by making a request through it."""
@@ -1736,7 +1757,7 @@ class MainWindow(QMainWindow):
         self.progress_bar.setValue(0)
         self.cycle_label.setText("0")
         self.status_label.setText("Idle")
-        self.log_message("Fields reset to default", "INFO")
+        self.log_message(self.translations.get("log_fields_reset", "Fields reset to default"), "INFO")
 
     def update_status(self, status):
         self.status_label.setText(status)
@@ -1796,13 +1817,13 @@ class MainWindow(QMainWindow):
             try:
                 with open(file_path, 'w', encoding='utf-8') as f:
                     f.write(self.log_viewer.toPlainText())
-                self.log_message(f"Logs exported to {file_path}", "INFO")
+                self.log_message(self.translations.get("log_logs_exported", "Logs exported to {file_path}").format(file_path=file_path), "INFO")
             except Exception as e:
-                self.log_message(f"Failed to export logs: {str(e)}", "ERROR")
+                self.log_message(self.translations.get("log_failed_export_logs", "Failed to export logs: {error}").format(error=str(e)), "ERROR")
 
     def clear_logs(self):
         self.log_viewer.clear()
-        self.log_message("Logs cleared", "INFO")
+        self.log_message(self.translations.get("log_logs_cleared", "Logs cleared"), "INFO")
 
     def change_theme(self, index):
         themes = {
@@ -1813,13 +1834,19 @@ class MainWindow(QMainWindow):
             4: self.get_soft_pink_style(),
             5: self.get_soft_lavender_style()
         }
-        self.setStyleSheet(themes[index])
-        self.log_message(f"Theme changed to {self.theme_combo.currentText()}", "INFO")
+        if index in themes:
+            self.setStyleSheet(themes[index])
+            self.log_message(self.translations.get("log_theme_changed", "Theme changed to {theme_name}").format(theme_name=self.theme_combo.currentText()), "INFO")
+        else:
+            # Default to first theme if index is invalid
+            self.setStyleSheet(themes[0])
+            self.theme_combo.setCurrentIndex(0)
+            self.log_message(self.translations.get("log_invalid_theme_index", "Invalid theme index, defaulting to Dark Navy"), "WARNING")
 
     def change_font_size(self, size):
         font = QFont("Poppins", size)
         QApplication.setFont(font)
-        self.log_message(f"Font size changed to {size}pt", "INFO")
+        self.log_message(self.translations.get("log_font_size_changed", "Font size changed to {size}pt").format(size=size), "INFO")
 
     def change_language(self, index):
         languages = {
@@ -1829,8 +1856,12 @@ class MainWindow(QMainWindow):
             3: "Chinese",
             4: "Filipino"
         }
-        self.log_message(f"Language changed to {languages[index]}", "INFO")
-        self.update_language(languages[index])
+        if index in languages:
+            self.log_message(self.translations.get("log_language_changed", "Language changed to {language}").format(language=languages[index]), "INFO")
+            self.update_language(languages[index])
+        else:
+            # Invalid index - just log warning, don't try to change to English to avoid recursion
+            self.log_message(self.translations.get("log_invalid_language_index", "Invalid language index: {index}, ignoring").format(index=index), "WARNING")
 
     def update_language(self, language):
         import importlib
@@ -1859,6 +1890,7 @@ class MainWindow(QMainWindow):
                     translations[lang_name] = {}
         
         lang = translations.get(language, translations.get("English", {}))
+        self.translations = lang  # Update the instance translations
         self.update_ui_text(lang)
 
     def update_ui_text(self, translations):
@@ -2001,8 +2033,8 @@ class MainWindow(QMainWindow):
         <p>{translations["version"]} {CURRENT_VERSION}</p>
         <p>{translations["developed_by"]} VoxDroid</p>
         <p>{translations["github"]}<a href="https://github.com/VoxDroid">https://github.com/VoxDroid</a></p>
-        <p>Support: <a href="https://github.com/VoxDroid/Advance-Tab-Manager/issues">Issues Page</a></p>
-        <p>{translations["description"]} Advanced Tab Manager is a Python-based desktop application built with PyQt6 and Selenium. It provides a user-friendly interface to automate browser tab management, allowing users to open and close Chrome tabs programmatically with extensive customization options. This tool is ideal for testing, simulation, or repetitive browser automation tasks.</p>
+        <p>{translations["about_support"]} <a href="https://github.com/VoxDroid/Advance-Tab-Manager/issues">{translations["about_issues_page"]}</a></p>
+        <p>{translations["about_description"]}</p>
         """
         about_label = self.findChild(QLabel, "about_label")
         if about_label:
@@ -2011,12 +2043,78 @@ class MainWindow(QMainWindow):
 
         # Update license text
         license_text = f"""
-        <p>This software is licensed under the {translations["license"]}. See <a href="https://github.com/VoxDroid/Advance-Tab-Manager?tab=MIT-1-ov-file">{translations["license"]} </a> for details.</p>
+        <p>{translations["about_license_text"].format(license=translations["license"])}</p>
         """
         license_label = self.findChild(QLabel, "license_label")
         if license_label:
             license_label.setText(license_text)
             license_label.setToolTip(translations["license_tooltip"])
+
+        # Update combo box items (disconnect signals to avoid recursion)
+        self.theme_combo.currentIndexChanged.disconnect(self.change_theme)
+        self.language_combo.currentIndexChanged.disconnect(self.change_language)
+        
+        self.browser_combo.clear()
+        self.browser_combo.addItems([
+            translations["browser_chrome"],
+            translations["browser_firefox"]
+        ])
+
+        self.theme_combo.clear()
+        self.theme_combo.addItems([
+            translations["theme_dark_navy"],
+            translations["theme_light_blue"],
+            translations["theme_dark_green"],
+            translations["theme_light_green"],
+            translations["theme_soft_pink"],
+            translations["theme_soft_lavender"]
+        ])
+
+        self.language_combo.clear()
+        self.language_combo.addItems([
+            translations["language_english"],
+            translations["language_japanese"],
+            translations["language_korean"],
+            translations["language_chinese"],
+            translations["language_filipino"]
+        ])
+
+        # Set the current index based on the language
+        lang_english = translations.get("language_english", "")
+        if lang_english == "English":
+            self.language_combo.setCurrentIndex(0)
+        elif lang_english == "英語":
+            self.language_combo.setCurrentIndex(1)
+        elif lang_english == "영어":
+            self.language_combo.setCurrentIndex(2)
+        elif lang_english == "英语":
+            self.language_combo.setCurrentIndex(3)
+        elif lang_english == "Ingles":
+            self.language_combo.setCurrentIndex(4)
+        else:
+            self.language_combo.setCurrentIndex(0)
+
+        # Reconnect signals
+        self.theme_combo.currentIndexChanged.connect(self.change_theme)
+        self.language_combo.currentIndexChanged.connect(self.change_language)
+
+        # Update system information display
+        if hasattr(self, 'system_info_label'):
+            system_info = f"""
+            {translations["system_info_os"]} {platform.system()} {platform.release()}
+            {translations["system_info_python_version"]} {platform.python_version()}
+            {translations["system_info_cpu"]} {platform.processor()}
+            {translations["system_info_cpu_cores"]} {psutil.cpu_count(logical=True)} (Physical: {psutil.cpu_count(logical=False)})
+            {translations["system_info_memory"]} {psutil.virtual_memory().total / (1024**3):.2f} GB
+            {translations["system_info_disk_space"]} {psutil.disk_usage('/').total / (1024**3):.2f} GB total
+            {translations["system_info_cpu_usage"]} {psutil.cpu_percent()}%
+            {translations["system_info_memory_usage"]} {psutil.virtual_memory().percent}%
+            """
+            self.system_info_label.setText(system_info)
+
+        # Update status bar
+        if hasattr(self, 'status_message'):
+            self.status_message.setText(translations["status_bar_ready"])
 
     def save_settings(self):
         ui_elements = {
@@ -2044,7 +2142,7 @@ class MainWindow(QMainWindow):
         }
         self.settings_manager = SettingsManager()
         self.settings_manager.save_settings(ui_elements)
-        self.log_message("Settings saved successfully", "INFO")
+        self.log_message(self.translations.get("log_settings_saved", "Settings saved successfully"), "INFO")
         self.update_window_size_lock()
 
     def load_settings(self):
@@ -2074,10 +2172,25 @@ class MainWindow(QMainWindow):
         self.settings_manager = SettingsManager()
         self.settings_manager.load_settings(ui_elements)
 
-        self.change_theme(self.theme_combo.currentIndex())
+        # Validate and apply theme
+        theme_index = self.theme_combo.currentIndex()
+        if 0 <= theme_index < self.theme_combo.count():
+            self.change_theme(theme_index)
+        else:
+            self.change_theme(0)  # Default to first theme
+
         self.change_font_size(self.font_size_spin.value())
-        self.change_language(self.language_combo.currentIndex())
-        self.log_message("Settings loaded successfully", "INFO")
+
+        # Validate and apply language
+        language_index = self.language_combo.currentIndex()
+        if 0 <= language_index < self.language_combo.count():
+            self.change_language(language_index)
+        else:
+            # Don't call change_language for invalid indices to avoid recursion
+            self.language_combo.setCurrentIndex(0)
+            self.log_message(self.translations.get("log_invalid_language_index_settings", "Invalid language index in settings, defaulting to English"), "WARNING")
+
+        self.log_message(self.translations.get("log_settings_loaded", "Settings loaded successfully"), "INFO")
         self.update_window_size_lock()
 
     def export_settings(self):
@@ -2085,9 +2198,9 @@ class MainWindow(QMainWindow):
         if file_path:
             try:
                 self.settings_manager.export_settings(file_path)
-                self.log_message(f"Settings exported to {file_path}", "INFO")
+                self.log_message(self.translations.get("log_settings_exported", "Settings exported to {file_path}").format(file_path=file_path), "INFO")
             except Exception as e:
-                self.log_message(f"Failed to export settings: {str(e)}", "ERROR")
+                self.log_message(self.translations.get("log_failed_export_settings", "Failed to export settings: {error}").format(error=str(e)), "ERROR")
 
     def import_settings(self):
         file_path, _ = QFileDialog.getOpenFileName(self, "Import Settings", "", "JSON Files (*.json)")
@@ -2095,9 +2208,9 @@ class MainWindow(QMainWindow):
             try:
                 self.settings_manager.import_settings(file_path)
                 self.load_settings()  # Reload settings into UI
-                self.log_message(f"Settings imported from {file_path}", "INFO")
+                self.log_message(self.translations.get("log_settings_imported", "Settings imported from {file_path}").format(file_path=file_path), "INFO")
             except Exception as e:
-                self.log_message(f"Failed to import settings: {str(e)}", "ERROR")
+                self.log_message(self.translations.get("log_failed_import_settings", "Failed to import settings: {error}").format(error=str(e)), "ERROR")
 
     def reset_to_default_settings(self):
         """Reset all settings to their default values."""
@@ -2144,18 +2257,18 @@ class MainWindow(QMainWindow):
                 self.change_language(0)
                 self.update_window_size_lock()
                 
-                self.log_message("All settings reset to default values", "INFO")
+                self.log_message(self.translations.get("log_settings_reset", "All settings reset to default values"), "INFO")
                 
             except Exception as e:
-                self.log_message(f"Failed to reset settings: {str(e)}", "ERROR")
+                self.log_message(self.translations.get("log_failed_reset_settings", "Failed to reset settings: {error}").format(error=str(e)), "ERROR")
 
     def closeEvent(self, event):
         # Auto-save settings before closing
         try:
             self.save_settings()
-            self.log_message("Settings auto-saved on exit", "INFO")
+            self.log_message(self.translations.get("log_settings_auto_saved", "Settings auto-saved on exit"), "INFO")
         except Exception as e:
-            self.log_message(f"Failed to auto-save settings: {str(e)}", "WARNING")
+            self.log_message(self.translations.get("log_failed_auto_save_settings", "Failed to auto-save settings: {error}").format(error=str(e)), "WARNING")
         
         self.stop_browser()
         for thread in self.threads:
@@ -2173,7 +2286,7 @@ class MainWindow(QMainWindow):
     def toggle_window_size_lock(self, state):
         self.lock_window_size = bool(state)
         self.update_window_size_lock()
-        self.log_message(f"Window size {'locked' if self.lock_window_size else 'unlocked'}", "INFO")
+        self.log_message(self.translations.get("log_window_size_lock", "Window size {status}").format(status="locked" if self.lock_window_size else "unlocked"), "INFO")
 
     def update_window_size_lock(self):
         if self.lock_window_size:
