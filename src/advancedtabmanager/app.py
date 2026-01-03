@@ -95,7 +95,7 @@ class MainWindow(QMainWindow):
         self.check_for_updates()
         
         self.setWindowIcon(QIcon(resource_path("resources/ATM.ico")))
-        self.setWindowTitle("Advanced Tab Manager Pro")
+        # Window title will be set by update_ui_text after translations load
         self.setGeometry(100, 100, 1100, 900)
         self.setMinimumSize(QSize(1100, 900))
         self.setStyleSheet(self.get_dark_navy_style())
@@ -136,10 +136,37 @@ class MainWindow(QMainWindow):
         self.version_checker.start()
 
     def show_update_notification(self, new_version, url):
+        # Get current translations
+        import importlib
+        translations = {}
+        lang_files = {
+            "English": "en",
+            "Japanese": "ja", 
+            "Korean": "ko",
+            "Chinese": "zh",
+            "Filipino": "fil"
+        }
+        current_lang = "English"  # Default fallback
+        try:
+            current_lang = ["English", "Japanese", "Korean", "Chinese", "Filipino"][self.language_combo.currentIndex()]
+        except:
+            pass
+        
+        try:
+            module = importlib.import_module(f".translations.{lang_files[current_lang]}", package=__package__)
+            translations = module.translations
+        except:
+            # Fallback to English
+            try:
+                module = importlib.import_module(f".translations.en", package=__package__)
+                translations = module.translations
+            except:
+                translations = {}
+        
         msg = QMessageBox(self)
-        msg.setWindowTitle("Update Available")
-        msg.setText(f"A new version ({new_version}) is available!")
-        msg.setInformativeText(f"Current version: {CURRENT_VERSION}\nVisit {url} to download.")
+        msg.setWindowTitle(translations.get("update_available_title", "Update Available"))
+        msg.setText(translations.get("update_available_text", "A new version ({new_version}) is available!").format(new_version=new_version))
+        msg.setInformativeText(translations.get("update_available_info", "Current version: {current_version}\nVisit {url} to download.").format(current_version=CURRENT_VERSION, url=url))
         msg.setStandardButtons(QMessageBox.StandardButton.Ok | QMessageBox.StandardButton.Ignore)
         msg.setDefaultButton(QMessageBox.StandardButton.Ok)
         reply = msg.exec()
@@ -148,9 +175,36 @@ class MainWindow(QMainWindow):
             webbrowser.open(url)
 
     def show_error_notification(self, error_message):
+        # Get current translations
+        import importlib
+        translations = {}
+        lang_files = {
+            "English": "en",
+            "Japanese": "ja", 
+            "Korean": "ko",
+            "Chinese": "zh",
+            "Filipino": "fil"
+        }
+        current_lang = "English"  # Default fallback
+        try:
+            current_lang = ["English", "Japanese", "Korean", "Chinese", "Filipino"][self.language_combo.currentIndex()]
+        except:
+            pass
+        
+        try:
+            module = importlib.import_module(f".translations.{lang_files[current_lang]}", package=__package__)
+            translations = module.translations
+        except:
+            # Fallback to English
+            try:
+                module = importlib.import_module(f".translations.en", package=__package__)
+                translations = module.translations
+            except:
+                translations = {}
+        
         msg = QMessageBox(self)
-        msg.setWindowTitle("Update Check Failed")
-        msg.setText("Unable to check for updates.")
+        msg.setWindowTitle(translations.get("update_check_failed_title", "Update Check Failed"))
+        msg.setText(translations.get("update_check_failed_text", "Unable to check for updates."))
         msg.setInformativeText(error_message)
         msg.setStandardButtons(QMessageBox.StandardButton.Ok)
         msg.exec()
@@ -1628,7 +1682,8 @@ class MainWindow(QMainWindow):
         """Test the proxy connection by making a request through it."""
         proxy_address = self.proxy_address_input.text().strip()
         if not proxy_address:
-            QMessageBox.warning(self, "Proxy Test", "Please enter a proxy address first.")
+            QMessageBox.warning(self, self.translations.get("proxy_test_title", "Proxy Test"), 
+                              self.translations.get("proxy_test_enter_address", "Please enter a proxy address first."))
             return
         
         # Parse proxy address
@@ -1638,12 +1693,13 @@ class MainWindow(QMainWindow):
             host, port_str = proxy_address.rsplit(':', 1)
             port = int(port_str)
         except ValueError:
-            QMessageBox.warning(self, "Proxy Test", "Invalid proxy format. Use IP:PORT (e.g., 127.0.0.1:8080)")
+            QMessageBox.warning(self, self.translations.get("proxy_test_title", "Proxy Test"), 
+                              self.translations.get("proxy_test_invalid_format", "Invalid proxy format. Use IP:PORT (e.g., 127.0.0.1:8080)"))
             return
         
         # Test the proxy
         self.test_proxy_button.setEnabled(False)
-        self.test_proxy_button.setText("Testing...")
+        self.test_proxy_button.setText(self.translations.get("proxy_test_button_testing", "Testing..."))
         
         # Create and start proxy test thread
         self.proxy_test_thread = ProxyTestThread(proxy_address)
@@ -1653,13 +1709,13 @@ class MainWindow(QMainWindow):
     def on_proxy_test_finished(self, message, msg_type):
         """Handle proxy test completion."""
         if msg_type == 'success':
-            QMessageBox.information(self, "Proxy Test", message)
+            QMessageBox.information(self, self.translations.get("proxy_test_title", "Proxy Test"), message)
         else:
-            QMessageBox.warning(self, "Proxy Test", message)
+            QMessageBox.warning(self, self.translations.get("proxy_test_title", "Proxy Test"), message)
         
         # Reset button
         self.test_proxy_button.setEnabled(True)
-        self.test_proxy_button.setText("Test Proxy")
+        self.test_proxy_button.setText(self.translations.get("proxy_test_button", "Test Proxy"))
         
         # Clean up thread
         self.proxy_test_thread.quit()
@@ -1777,650 +1833,32 @@ class MainWindow(QMainWindow):
         self.update_language(languages[index])
 
     def update_language(self, language):
-        translations = {
-            "English": {
-                "app_name": "Advanced Tab Manager Pro",
-                "main_url": "URL:",
-                "main_iterations": "Iterations (0 for infinite):",
-                "main_interval": "Interval (seconds):",
-                "main_instances": "Number of instances:",
-                "main_start": "Start",
-                "main_stop": "Stop",
-                "main_reset": "Reset",
-                "main_status": "Status:",
-                "main_cycles": "Cycles:",
-                "main_url_tooltip": "Enter the URL to open in tabs",
-                "main_iterations_tooltip": "Set to 0 for infinite iterations",
-                "main_interval_tooltip": "Set the delay between tab openings in seconds",
-                "main_instances_tooltip": "Set the number of browser instances to run simultaneously",
-                "main_start_tooltip": "Start opening tabs",
-                "main_stop_tooltip": "Stop all tab operations",
-                "main_reset_tooltip": "Reset all fields to default values",
-                "main_status_tooltip": "Current status of the tab manager",
-                "main_cycles_tooltip": "Number of tab cycles completed",
-                "url_group": "URL Configuration",
-                "iterations_group": "Iterations",
-                "interval_group": "Interval",
-                "instances_group": "Instances",
-                "button_group": "Actions",
-                "status_group": "Status",
-                "progress_group": "Progress",
-                "cycles_group": "Cycles",
-                "advanced_headless": "Headless mode",
-                "advanced_disable_gpu": "Disable GPU",
-                "advanced_incognito": "Incognito mode",
-                "advanced_disable_extensions": "Disable extensions",
-                "advanced_start_maximized": "Start maximized",
-                "advanced_disable_notifications": "Disable notifications",
-                "advanced_disable_web_security": "Disable web security",
-                "advanced_no_sandbox": "No sandbox",
-                "advanced_disable_dev_shm": "Disable /dev/shm usage",
-                "advanced_user_agent": "Enter custom user agent (optional):",
-                "advanced_proxy": "Use proxy",
-                "advanced_proxy_address": "Proxy address (e.g., 127.0.0.1:8080):",
-                "advanced_headless_tooltip": "Run browser in headless mode (no UI) - uses new headless implementation",
-                "advanced_disable_gpu_tooltip": "Disable GPU hardware acceleration",
-                "advanced_incognito_tooltip": "Run browser in private/incognito mode",
-                "advanced_disable_extensions_tooltip": "Disable all browser extensions",
-                "advanced_start_maximized_tooltip": "Start browser maximized",
-                "advanced_disable_notifications": "Disable notifications",
-                "advanced_disable_notifications_tooltip": "Disable browser notifications",
-                "advanced_disable_web_security": "Disable web security",
-                "advanced_disable_web_security_tooltip": "Disable web security features (Chrome only)",
-                "advanced_no_sandbox": "No sandbox",
-                "advanced_no_sandbox_tooltip": "Disable sandbox (Chrome only)",
-                "advanced_disable_dev_shm": "Disable /dev/shm usage",
-                "advanced_disable_dev_shm_tooltip": "Disable /dev/shm usage (Chrome only)",
-                "advanced_user_agent_tooltip": "Enter a custom user agent for the browser (optional)",
-                "advanced_proxy_tooltip": "Enable use of a proxy server",
-                "advanced_proxy_address_tooltip": "Enter proxy address in the format IP:PORT (e.g., 127.0.0.1:8080)",
-                "browser_options_group": "Browser Options",
-                "user_agent_group": "User Agent",
-                "proxy_group": "Proxy Settings",
-                "settings_theme": "Theme:",
-                "settings_font": "Font Size:",
-                "settings_language": "Language:",
-                "settings_save": "Save Settings",
-                "settings_load": "Load Settings",
-                "settings_reset": "Reset to Default",
-                "settings_export": "Export Logs",
-                "settings_clear": "Clear Logs",
-                "settings_autostart": "Auto-Start on Launch:",
-                "settings_lock_window_size": "Lock Window Size:",
-                "settings_theme_tooltip": "Select the visual theme for the application",
-                "settings_font_tooltip": "Adjust the font size for the application (8–24 pt)",
-                "settings_language_tooltip": "Select the language for the application interface",
-                "settings_save_tooltip": "Save current application settings",
-                                "settings_load_tooltip": "Load previously saved settings",
-                "settings_reset_tooltip": "Reset all settings to their default values",
-                "settings_export_tooltip": "Export application logs to a text file",
-                "settings_clear_tooltip": "Clear all log messages",
-                "settings_autostart_tooltip": "Automatically start the browser on application launch",
-                "settings_lock_window_size_tooltip": "Prevent resizing the window with the mouse",
-                "theme_group": "Theme Selection",
-                "font_group": "Font Size",
-                "language_group": "Language",
-                "actions_group": "Actions",
-                "autostart_group": "Auto-Start Options",
-                "lock_window_size_group": "Window Size Lock",
-                "system_details": "System Details:",
-                "system_cpu_usage": "CPU Usage:",
-                "system_memory_usage": "Memory Usage:",
-                "system_disk_usage": "Disk Usage:",
-                "system_details_tooltip": "View detailed information about the system",
-                "system_cpu_usage_tooltip": "View real-time CPU usage percentage",
-                "system_memory_usage_tooltip": "View real-time memory usage percentage",
-                "system_disk_usage_tooltip": "View real-time disk usage percentage",
-                "system_group": "System Information",
-                "monitor_group": "Real-time System Monitor",
-                "logs": "Logs:",
-                "logs_show_info": "Show Info",
-                "logs_show_warning": "Show Warnings",
-                "logs_show_error": "Show Errors",
-                "logs_tooltip": "View application log messages",
-                "logs_show_info_tooltip": "Show informational log messages",
-                "logs_show_warning_tooltip": "Show warning log messages",
-                "logs_show_error_tooltip": "Show error log messages",
-                "logs_group": "Application Logs",
-                "filter_group": "Log Filters",
-                "actions_group_logs": "Log Actions",
-                "about": "About:",
-                "about_tooltip": "View information about the application",
-                "license": "License",
-                "license_tooltip": "View the software license details",
-                "about_group": "About Advanced Tab Manager",
-                "license_group": "License",
-                "tab_main": "Main",
-                "tab_advanced": "Advanced",
-                "tab_settings": "Settings",
-                "tab_system": "System",
-                "tab_logs": "Logs",
-                "tab_about": "About",
-                "status_ready": "Ready",
-                "status_running": "Running...",
-                "status_stopped": "Stopped",
-                "status_idle": "Idle",
-                "error": "Error",
-                "please_enter_valid_url": "Please enter a valid URL!",
-                "developed_by": "Developed by: ",
-                "github": "GitHub: ",
-                "version": "Version: ",
-                "description": "Description: "
-            },
-            "Japanese": {
-                "app_name": "高度なタブマネージャープロ",
-                "main_url": "URL：",
-                "main_iterations": "イテレーション (0で無限):",
-                "main_interval": "インターバル (秒):",
-                "main_instances": "インスタンス数:",
-                "main_start": "開始",
-                "main_stop": "停止",
-                "main_reset": "リセット",
-                "main_status": "ステータス：",
-                "main_cycles": "サイクル:",
-                "main_url_tooltip": "タブで開くURLを入力してください",
-                "main_iterations_tooltip": "無限のイテレーションのために0に設定します",
-                "main_interval_tooltip": "タブの開き間の遅延を秒単位で設定します",
-                "main_instances_tooltip": "同時に実行するブラウザインスタンスの数を設定します",
-                "main_start_tooltip": "タブの開きを開始します",
-                "main_stop_tooltip": "すべてのタブ操作を停止します",
-                "main_reset_tooltip": "すべてのフィールドをデフォルト値にリセットします",
-                "main_status_tooltip": "タブマネージャーの現在のステータス",
-                "main_cycles_tooltip": "完了したタブサイクルの数",
-                "url_group": "URL構成",
-                "iterations_group": "イテレーション",
-                "interval_group": "インターバル",
-                "instances_group": "インスタンス",
-                "button_group": "操作",
-                "status_group": "ステータス",
-                "progress_group": "進捗",
-                "cycles_group": "サイクル",
-                "advanced_headless": "ヘッドレスモード",
-                "advanced_disable_gpu": "GPUを無効化",
-                "advanced_incognito": "インコグニトモード",
-                "advanced_disable_extensions": "拡張機能を無効化",
-                "advanced_start_maximized": "最大化して開始",
-                "advanced_disable_notifications": "通知を無効化",
-                "advanced_disable_web_security": "ウェブセキュリティを無効化",
-                "advanced_no_sandbox": "サンドボックスなし",
-                "advanced_disable_dev_shm": "/dev/shm使用を無効化",
-                "advanced_user_agent": "カスタムユーザーエージェントを入力 (オプション):",
-                "advanced_proxy": "プロキシを使用",
-                "advanced_proxy_address": "プロキシアドレス (例: 127.0.0.1:8080):",
-                "advanced_headless_tooltip": "ブラウザをヘッドレスモードで実行 (UIなし) - 新しいヘッドレス実装を使用",
-                "advanced_disable_gpu_tooltip": "GPUハードウェアアクセラレーションを無効化",
-                "advanced_incognito_tooltip": "ブラウザをプライベート/インコグニトモードで実行",
-                "advanced_disable_extensions_tooltip": "すべてのブラウザ拡張機能を無効化",
-                "advanced_start_maximized_tooltip": "ブラウザを最大化して開始",
-                "advanced_disable_notifications": "通知を無効化",
-                "advanced_disable_notifications_tooltip": "ブラウザ通知を無効化",
-                "advanced_disable_web_security": "ウェブセキュリティを無効化",
-                "advanced_disable_web_security_tooltip": "ウェブセキュリティ機能を無効化 (Chromeのみ)",
-                "advanced_no_sandbox": "サンドボックスなし",
-                "advanced_no_sandbox_tooltip": "サンドボックスを無効化 (Chromeのみ)",
-                "advanced_disable_dev_shm": "/dev/shm使用を無効化",
-                "advanced_disable_dev_shm_tooltip": "/dev/shm使用を無効化 (Chromeのみ)",
-                "advanced_user_agent_tooltip": "ブラウザ用のカスタムユーザーエージェントを入力 (オプション)",
-                "advanced_proxy_tooltip": "プロキシサーバーの使用を有効化",
-                "advanced_proxy_address_tooltip": "プロキシアドレスをIP:PORT形式で入力 (例: 127.0.0.1:8080)",
-                "advanced_args_tooltip": "Chromeコマンドライン引数を1行ごとに追加 (例: --disable-notifications)",
-                "browser_options_group": "Chromeオプション",
-                "user_agent_group": "ユーザーエージェント",
-                "proxy_group": "プロキシ設定",
-                "settings_theme": "テーマ：",
-                "settings_font": "フォントサイズ：",
-                "settings_language": "言語：",
-                "settings_save": "設定を保存",
-                "settings_load": "設定を読み込む",
-                "settings_reset": "デフォルトにリセット",
-                "settings_export": "ログをエクスポート",
-                "settings_clear": "ログをクリア",
-                "settings_autostart": "起動時の自動開始：",
-                "settings_lock_window_size": "ウィンドウサイズをロック：",
-                "settings_theme_tooltip": "アプリケーションの視覚的なテーマを選択します",
-                "settings_font_tooltip": "アプリケーションのフォントサイズを調整 (8–24 pt)",
-                "settings_language_tooltip": "アプリケーションインターフェイスの言語を選択します",
-                "settings_save_tooltip": "現在のアプリケーション設定を保存します",
-                "settings_load_tooltip": "以前に保存された設定を読み込みます",
-                "settings_reset_tooltip": "すべての設定をデフォルト値にリセットします",
-                "settings_export_tooltip": "アプリケーションのログをテキストファイルにエクスポートします",
-                "settings_clear_tooltip": "すべてのログメッセージをクリアします",
-                "settings_autostart_tooltip": "アプリケーション起動時にブラウザを自動的に開始します",
-                "settings_lock_window_size_tooltip": "マウスでのウィンドウサイズ変更を防止します",
-                "theme_group": "テーマ選択",
-                "font_group": "フォントサイズ",
-                "language_group": "言語",
-                "actions_group": "操作",
-                "autostart_group": "自動開始オプション",
-                "lock_window_size_group": "ウィンドウサイズロック",
-                "system_details": "システム詳細：",
-                "system_cpu_usage": "CPU使用率：",
-                "system_memory_usage": "メモリ使用率：",
-                "system_disk_usage": "ディスク使用率：",
-                "system_details_tooltip": "システムに関する詳細情報を表示します",
-                "system_cpu_usage_tooltip": "リアルタイムCPU使用率を表示します",
-                "system_memory_usage_tooltip": "リアルタイムメモリ使用率を表示します",
-                "system_disk_usage_tooltip": "リアルタイムディスク使用率を表示します",
-                "system_group": "システム情報",
-                "monitor_group": "リアルタイムシステムモニター",
-                "logs": "ログ：",
-                "logs_show_info": "情報を表示",
-                "logs_show_warning": "警告を表示",
-                "logs_show_error": "エラーを表示",
-                "logs_tooltip": "アプリケーションのログメッセージを表示します",
-                "logs_show_info_tooltip": "情報ログメッセージを表示します",
-                "logs_show_warning_tooltip": "警告ログメッセージを表示します",
-                "logs_show_error_tooltip": "エラーログメッセージを表示します",
-                "logs_group": "アプリケーションログ",
-                "filter_group": "ログフィルター",
-                "actions_group_logs": "ログ操作",
-                "about": "概要：",
-                "about_tooltip": "アプリケーションに関する情報を表示します",
-                "license": "ライセンス",
-                "license_tooltip": "ソフトウェアのライセンスの詳細を表示します",
-                "about_group": "高度なタブマネージャーについて",
-                "license_group": "ライセンス",
-                "tab_main": "メイン",
-                "tab_advanced": "高度",
-                "tab_settings": "設定",
-                "tab_system": "システム",
-                "tab_logs": "ログ",
-                "tab_about": "概要",
-                "status_ready": "準備完了",
-                "status_running": "実行中...",
-                "status_stopped": "停止済み",
-                "status_idle": "待機中",
-                "error": "エラー",
-                "please_enter_valid_url": "有効なURLを入力してください！",
-                "developed_by": "開発者：",
-                "github": "GitHub：",
-                "version": "バージョン：",
-                "description": "説明："
-            },
-            "Korean": {
-                "app_name": "고급 탭 관리자 프로",
-                "main_url": "URL:",
-                "main_iterations": "반복 (0은 무한):",
-                "main_interval": "간격 (초):",
-                "main_instances": "인스턴스 수:",
-                "main_start": "시작",
-                "main_stop": "중지",
-                "main_reset": "초기화",
-                "main_status": "상태:",
-                "main_cycles": "사이클:",
-                "main_url_tooltip": "탭에서 열 URL을 입력하세요",
-                "main_iterations_tooltip": "무한 반복을 위해 0으로 설정하세요",
-                "main_interval_tooltip": "탭 열기 간의 지연을 초 단위로 설정하세요",
-                "main_instances_tooltip": "동시에 실행할 브라우저 인스턴스 수를 설정하세요",
-                "main_start_tooltip": "탭 열기를 시작하세요",
-                "main_stop_tooltip": "모든 탭 작업을 중지하세요",
-                "main_reset_tooltip": "모든 필드를 기본값으로 초기화하세요",
-                "main_status_tooltip": "탭 관리자의 현재 상태",
-                "main_cycles_tooltip": "완료된 탭 사이클 수",
-                "url_group": "URL 구성",
-                "iterations_group": "반복",
-                "interval_group": "간격",
-                "instances_group": "인스턴스",
-                "button_group": "작업",
-                "status_group": "상태",
-                "progress_group": "진행 상황",
-                "cycles_group": "사이클",
-                "advanced_headless": "헤드리스 모드",
-                "advanced_disable_gpu": "GPU 비활성화",
-                "advanced_incognito": "시크릿 모드",
-                "advanced_disable_extensions": "확장 프로그램 비활성화",
-                "advanced_start_maximized": "최대화하여 시작",
-                "advanced_disable_notifications": "알림 비활성화",
-                "advanced_disable_web_security": "웹 보안 비활성화",
-                "advanced_no_sandbox": "샌드박스 없음",
-                "advanced_disable_dev_shm": "/dev/shm 사용 비활성화",
-                "advanced_user_agent": "사용자 정의 사용자 에이전트 입력 (옵션):",
-                "advanced_proxy": "프록시 사용",
-                "advanced_proxy_address": "프록시 주소 (예: 127.0.0.1:8080):",
-                "advanced_headless_tooltip": "브라우저를 헤드리스 모드에서 실행 (UI 없음) - 새로운 헤드리스 구현 사용",
-                "advanced_disable_gpu_tooltip": "GPU 하드웨어 가속 비활성화",
-                "advanced_incognito_tooltip": "브라우저를 프라이빗/시크릿 모드에서 실행",
-                "advanced_disable_extensions_tooltip": "모든 브라우저 확장 프로그램 비활성화",
-                "advanced_start_maximized_tooltip": "브라우저를 최대화하여 시작",
-                "advanced_disable_notifications": "알림 비활성화",
-                "advanced_disable_notifications_tooltip": "브라우저 알림 비활성화",
-                "advanced_disable_web_security": "웹 보안 비활성화",
-                "advanced_disable_web_security_tooltip": "웹 보안 기능 비활성화 (Chrome 전용)",
-                "advanced_no_sandbox": "샌드박스 없음",
-                "advanced_no_sandbox_tooltip": "샌드박스 비활성화 (Chrome 전용)",
-                "advanced_disable_dev_shm": "/dev/shm 사용 비활성화",
-                "advanced_disable_dev_shm_tooltip": "/dev/shm 사용 비활성화 (Chrome 전용)",
-                "advanced_user_agent_tooltip": "브라우저용 사용자 정의 사용자 에이전트를 입력 (옵션)",
-                "advanced_proxy_tooltip": "프록시 서버 사용 활성화",
-                "advanced_proxy_address_tooltip": "프록시 주소를 IP:PORT 형식으로 입력 (예: 127.0.0.1:8080)",
-                "advanced_args_tooltip": "Chrome 명령줄 인수를 줄마다 하나씩 추가 (예: --disable-notifications)",
-                "browser_options_group": "Chrome 옵션",
-                "user_agent_group": "사용자 에이전트",
-                "proxy_group": "프록시 설정",
-                "settings_theme": "테마：",
-                "settings_font": "글꼴 크기：",
-                "settings_language": "언어：",
-                "settings_save": "설정 저장",
-                "settings_load": "설정 불러오기",
-                "settings_reset": "기본값으로 재설정",
-                "settings_export": "로그 내보내기",
-                "settings_clear": "로그 지우기",
-                "settings_autostart": "시작 시 자동 시작：",
-                "settings_lock_window_size": "창 크기 잠금：",
-                "settings_theme_tooltip": "애플리케이션의 시각적 테마를 선택하세요",
-                "settings_font_tooltip": "애플리케이션의 글꼴 크기를 조정하세요 (8–24 pt)",
-                "settings_language_tooltip": "애플리케이션 인터페이스의 언어를 선택하세요",
-                "settings_save_tooltip": "현재 애플리케이션 설정을 저장하세요",
-                "settings_load_tooltip": "이전에 저장된 설정을 불러오세요",
-                "settings_reset_tooltip": "모든 설정을 기본값으로 재설정하세요",
-                "settings_export_tooltip": "애플리케이션 로그를 텍스트 파일로 내보내세요",
-                "settings_clear_tooltip": "모든 로그 메시지를 지우세요",
-                "settings_autostart_tooltip": "애플리케이션 시작 시 브라우저를 자동으로 시작하세요",
-                "settings_lock_window_size_tooltip": "마우스로 창 크기를 조정하지 못하도록 합니다",
-                "theme_group": "테마 선택",
-                "font_group": "글꼴 크기",
-                "language_group": "언어",
-                "actions_group": "작업",
-                "autostart_group": "자동 시작 옵션",
-                "lock_window_size_group": "창 크기 잠금",
-                "system_details": "시스템 세부사항：",
-                "system_cpu_usage": "CPU 사용률：",
-                "system_memory_usage": "메모리 사용률：",
-                "system_disk_usage": "디스크 사용률：",
-                "system_details_tooltip": "시스템에 대한 상세 정보를 보세요",
-                "system_cpu_usage_tooltip": "실시간 CPU 사용률을 확인하세요",
-                "system_memory_usage_tooltip": "실시간 메모리 사용률을 확인하세요",
-                "system_disk_usage_tooltip": "실시간 디스크 사용률을 확인하세요",
-                "system_group": "시스템 정보",
-                "monitor_group": "실시간 시스템 모니터",
-                "logs": "로그：",
-                "logs_show_info": "정보 표시",
-                "logs_show_warning": "경고 표시",
-                "logs_show_error": "오류 표시",
-                "logs_tooltip": "애플리케이션 로그 메시지를 보세요",
-                "logs_show_info_tooltip": "정보 로그 메시지를 표시합니다",
-                "logs_show_warning_tooltip": "경고 로그 메시지를 표시합니다",
-                "logs_show_error_tooltip": "오류 로그 메시지를 표시합니다",
-                "logs_group": "애플리케이션 로그",
-                "filter_group": "로그 필터",
-                "actions_group_logs": "로그 작업",
-                "about": "정보：",
-                "about_tooltip": "애플리케이션에 대한 정보를 보세요",
-                "license": "라이선스",
-                "license_tooltip": "소프트웨어 라이선스 세부사항을 보세요",
-                "about_group": "고급 탭 관리자 정보",
-                "license_group": "라이선스",
-                "tab_main": "메인",
-                "tab_advanced": "고급",
-                "tab_settings": "설정",
-                "tab_system": "시스템",
-                "tab_logs": "로그",
-                "tab_about": "정보",
-                "status_ready": "준비 완료",
-                "status_running": "실행 중...",
-                "status_stopped": "중지됨",
-                "status_idle": "유휴",
-                "error": "오류",
-                "please_enter_valid_url": "유효한 URL을 입력하세요!",
-                "developed_by": "개발자：",
-                "github": "GitHub：",
-                "version": "버전：",
-                "description": "설명："
-            },
-            "Chinese": {
-                "app_name": "高级标签管理器专业版",
-                "main_url": "URL：",
-                "main_iterations": "迭代次数（0为无限）：",
-                "main_interval": "间隔（秒）：",
-                "main_instances": "实例数量：",
-                "main_start": "开始",
-                "main_stop": "停止",
-                "main_reset": "重置",
-                "main_status": "状态：",
-                "main_cycles": "循环：",
-                "main_url_tooltip": "输入要在标签页中打开的URL",
-                "main_iterations_tooltip": "设置为0以进行无限迭代",
-                "main_interval_tooltip": "设置标签页打开之间的延迟（以秒为单位）",
-                "main_instances_tooltip": "设置同时运行的浏览器实例数量",
-                "main_start_tooltip": "开始打开标签页",
-                "main_stop_tooltip": "停止所有标签页操作",
-                "main_reset_tooltip": "将所有字段重置为默认值",
-                "main_status_tooltip": "标签管理器的当前状态",
-                "main_cycles_tooltip": "已完成的标签页循环次数",
-                "url_group": "URL配置",
-                "iterations_group": "迭代",
-                "interval_group": "间隔",
-                "instances_group": "实例",
-                "button_group": "操作",
-                "status_group": "状态",
-                "progress_group": "进度",
-                "cycles_group": "循环",
-                "advanced_headless": "无头模式",
-                "advanced_disable_gpu": "禁用GPU",
-                "advanced_incognito": "隐身模式",
-                "advanced_disable_extensions": "禁用扩展",
-                "advanced_start_maximized": "最大化启动",
-                "advanced_disable_notifications": "禁用通知",
-                "advanced_disable_web_security": "禁用网络安全",
-                "advanced_no_sandbox": "无沙箱",
-                "advanced_disable_dev_shm": "禁用/dev/shm使用",
-                "advanced_user_agent": "输入自定义用户代理（可选）：",
-                "advanced_proxy": "使用代理",
-                "advanced_proxy_address": "代理地址（例如：127.0.0.1:8080）：",
-                "advanced_headless_tooltip": "以无头模式运行浏览器（无UI）- 使用新的无头实现",
-                "advanced_disable_gpu_tooltip": "禁用GPU硬件加速",
-                "advanced_incognito_tooltip": "以隐私/隐身模式运行浏览器",
-                "advanced_disable_extensions_tooltip": "禁用所有浏览器扩展",
-                "advanced_start_maximized_tooltip": "最大化启动浏览器",
-                "advanced_disable_notifications": "禁用通知",
-                "advanced_disable_notifications_tooltip": "禁用浏览器通知",
-                "advanced_disable_web_security": "禁用网络安全",
-                "advanced_disable_web_security_tooltip": "禁用网络安全功能（Chrome专用）",
-                "advanced_no_sandbox": "无沙箱",
-                "advanced_no_sandbox_tooltip": "禁用沙箱（Chrome专用）",
-                "advanced_disable_dev_shm": "禁用/dev/shm使用",
-                "advanced_disable_dev_shm_tooltip": "禁用/dev/shm使用（Chrome专用）",
-                "browser_options_group": "浏览器选项",
-                "user_agent_group": "用户代理",
-                "proxy_group": "代理设置",
-                "settings_theme": "主题：",
-                "settings_font": "字体大小：",
-                "settings_language": "语言：",
-                "settings_save": "保存设置",
-                "settings_load": "加载设置",
-                "settings_reset": "重置为默认",
-                "settings_export": "导出日志",
-                "settings_clear": "清除日志",
-                "settings_autostart": "启动时自动启动：",
-                "settings_lock_window_size": "锁定窗口大小：",
-                "settings_theme_tooltip": "选择应用程序的视觉主题",
-                "settings_font_tooltip": "调整应用程序的字体大小（8–24 pt）",
-                "settings_language_tooltip": "选择应用程序界面的语言",
-                "settings_save_tooltip": "保存当前应用程序设置",
-                "settings_load_tooltip": "加载之前保存的设置",
-                "settings_reset_tooltip": "将所有设置重置为默认值",
-                "settings_export_tooltip": "将应用程序日志导出到文本文件",
-                "settings_clear_tooltip": "清除所有日志消息",
-                "settings_autostart_tooltip": "在应用程序启动时自动启动浏览器",
-                "settings_lock_window_size_tooltip": "防止用鼠标调整窗口大小",
-                "theme_group": "主题选择",
-                "font_group": "字体大小",
-                "language_group": "语言",
-                "actions_group": "操作",
-                "autostart_group": "自动启动选项",
-                "lock_window_size_group": "窗口大小锁定",
-                "system_details": "系统详情：",
-                "system_cpu_usage": "CPU使用率：",
-                "system_memory_usage": "内存使用率：",
-                "system_disk_usage": "磁盘使用率：",
-                "system_details_tooltip": "查看系统的详细信息",
-                "system_cpu_usage_tooltip": "查看实时CPU使用率百分比",
-                "system_memory_usage_tooltip": "查看实时内存使用率百分比",
-                "system_disk_usage_tooltip": "查看实时磁盘使用率百分比",
-                "system_group": "系统信息",
-                "monitor_group": "实时系统监控",
-                "logs": "日志：",
-                "logs_show_info": "显示信息",
-                "logs_show_warning": "显示警告",
-                "logs_show_error": "显示错误",
-                "logs_tooltip": "查看应用程序日志消息",
-                "logs_show_info_tooltip": "显示信息日志消息",
-                "logs_show_warning_tooltip": "显示警告日志消息",
-                "logs_show_error_tooltip": "显示错误日志消息",
-                "logs_group": "应用程序日志",
-                "filter_group": "日志过滤器",
-                "actions_group_logs": "日志操作",
-                "about": "关于：",
-                "about_tooltip": "查看应用程序信息",
-                "license": "许可",
-                "license_tooltip": "查看软件许可详情",
-                "about_group": "关于高级标签管理器",
-                "license_group": "许可",
-                "tab_main": "主页",
-                "tab_advanced": "高级",
-                "tab_settings": "设置",
-                "tab_system": "系统",
-                "tab_logs": "日志",
-                "tab_about": "关于",
-                "status_ready": "就绪",
-                "status_running": "运行中...",
-                "status_stopped": "已停止",
-                "status_idle": "空闲",
-                "error": "错误",
-                "please_enter_valid_url": "请输入有效的URL！",
-                "developed_by": "开发者：",
-                "github": "GitHub：",
-                "version": "版本：",
-                "description": "描述："
-            },
-            "Filipino": {
-                "app_name": "Advanced Tab Manager Pro",
-                "main_url": "URL:",
-                "main_iterations": "Mga Iterasyon (0 para sa walang hanggan):",
-                "main_interval": "Agwat (segundo):",
-                "main_instances": "Bilang ng mga instansya:",
-                "main_start": "Simula",
-                "main_stop": "Hinto",
-                "main_reset": "I-reset",
-                "main_status": "Katayuan:",
-                "main_cycles": "Mga Siklo:",
-                "main_url_tooltip": "Ipasok ang URL na bubuksan sa mga tab",
-                "main_iterations_tooltip": "Itakda sa 0 para sa walang hanggang mga iterasyon",
-                "main_interval_tooltip": "Itakda ang pagkaantala sa pagbukas ng mga tab sa segundo",
-                "main_instances_tooltip": "Itakda ang bilang ng mga instansya ng browser na tatakbo nang sabay-sabay",
-                "main_start_tooltip": "Simulan ang pagbukas ng mga tab",
-                "main_stop_tooltip": "Huwag patuloy ang lahat ng operasyon ng tab",
-                "main_reset_tooltip": "Ibalik ang lahat ng mga patlang sa mga default na halaga",
-                "main_status_tooltip": "Kasalukuyang katayuan ng tagapamahala ng tab",
-                "main_cycles_tooltip": "Bilang ng mga siklo ng tab na natapos",
-                "url_group": "Konpigurasyon ng URL",
-                "iterations_group": "Mga Iterasyon",
-                "interval_group": "Agwat",
-                "instances_group": "Mga Instansya",
-                "button_group": "Mga Aksyon",
-                "status_group": "Katayuan",
-                "progress_group": "Pag-unlad",
-                "cycles_group": "Mga Siklo",
-                "advanced_headless": "Headless mode",
-                "advanced_disable_gpu": "Huwag paganahin ang GPU",
-                "advanced_incognito": "Incognito mode",
-                "advanced_disable_extensions": "Huwag paganahin ang mga extension",
-                "advanced_start_maximized": "Simulan nang pinakamalaki",
-                "advanced_disable_notifications": "Huwag paganahin ang mga notification",
-                "advanced_disable_web_security": "Huwag paganahin ang web security",
-                "advanced_no_sandbox": "Walang sandbox",
-                "advanced_disable_dev_shm": "Huwag paganahin ang /dev/shm usage",
-                "advanced_user_agent": "Magpasok ng custom user agent (opsyonal):",
-                "advanced_proxy": "Gumamit ng proxy",
-                "advanced_proxy_address": "Address ng proxy (hal. 127.0.0.1:8080):",
-                "advanced_headless_tooltip": "Patakbuhin ang browser sa headless mode (walang UI)",
-                "advanced_disable_gpu_tooltip": "Huwag paganahin ang hardware acceleration ng GPU",
-                "advanced_incognito_tooltip": "Patakbuhin ang browser sa private/incognito mode",
-                "advanced_disable_extensions_tooltip": "Huwag paganahin ang lahat ng browser extensions",
-                "advanced_start_maximized_tooltip": "Simulan ang browser nang pinakamalaki",
-                "advanced_disable_notifications": "Huwag paganahin ang mga notification",
-                "advanced_disable_notifications_tooltip": "Huwag paganahin ang mga notification ng browser",
-                "advanced_disable_web_security": "Huwag paganahin ang web security",
-                "advanced_disable_web_security_tooltip": "Huwag paganahin ang mga web security features (Chrome lang)",
-                "advanced_no_sandbox": "Walang sandbox",
-                "advanced_no_sandbox_tooltip": "Huwag paganahin ang sandbox (Chrome lang)",
-                "advanced_disable_dev_shm": "Huwag paganahin ang /dev/shm usage",
-                "advanced_disable_dev_shm_tooltip": "Huwag paganahin ang /dev/shm usage (Chrome lang)",
-                "browser_options_group": "Mga Opsyon ng Browser",
-                "user_agent_group": "User Agent",
-                "proxy_group": "Mga Setting ng Proxy",
-                "settings_theme": "Tema:",
-                "settings_font": "Laki ng Font:",
-                "settings_language": "Wika:",
-                "settings_save": "I-save ang Mga Setting",
-                "settings_load": "Mag-load ng Mga Setting",
-                "settings_reset": "I-reset sa Default",
-                "settings_export": "I-export ang Mga Log",
-                "settings_clear": "Burahin ang Mga Log",
-                "settings_autostart": "Auto-Start kapag Naglunsad:",
-                "settings_lock_window_size": "I-lock ang Laki ng Window:",
-                "settings_theme_tooltip": "Pumili ng biswal na tema para sa aplikasyon",
-                "settings_font_tooltip": "Ayusin ang laki ng font para sa aplikasyon (8–24 pt)",
-                "settings_language_tooltip": "Pumili ng wika para sa interface ng aplikasyon",
-                "settings_save_tooltip": "I-save ang kasalukuyang mga setting ng aplikasyon",
-                "settings_load_tooltip": "Mag-load ng mga na-save nang naunang mga setting",
-                "settings_reset_tooltip": "I-reset ang lahat ng mga setting sa kanilang mga default na halaga",
-                "settings_export_tooltip": "I-export ang mga log ng aplikasyon sa isang text file",
-                "settings_clear_tooltip": "Burahin ang lahat ng mga mensahe ng log",
-                "settings_autostart_tooltip": "Awtomatikong simulan ang browser kapag naglunsad ang aplikasyon",
-                "settings_lock_window_size_tooltip": "Pigilan ang pag-aayos ng laki ng window gamit ang mouse",
-                "theme_group": "Pagpili ng Tema",
-                "font_group": "Laki ng Font",
-                "language_group": "Wika",
-                "actions_group": "Mga Aksyon",
-                "autostart_group": "Mga Opsyon ng Auto-Start",
-                "lock_window_size_group": "Pagsasara ng Laki ng Window",
-                "system_details": "Detalye ng System:",
-                "system_cpu_usage": "Paggamit ng CPU:",
-                "system_memory_usage": "Paggamit ng Memorya:",
-                "system_disk_usage": "Paggamit ng Disk:",
-                "system_details_tooltip": "Tingnan ang detalyadong impormasyon tungkol sa system",
-                "system_cpu_usage_tooltip": "Tingnan ang real-time na porsyento ng paggamit ng CPU",
-                "system_memory_usage_tooltip": "Tingnan ang real-time na porsyento ng paggamit ng memorya",
-                "system_disk_usage_tooltip": "Tingnan ang real-time na porsyento ng paggamit ng disk",
-                "system_group": "Impormasyon ng System",
-                "monitor_group": "Real-time System Monitor",
-                "logs": "Mga Log:",
-                "logs_show_info": "Ipakita ang Info",
-                "logs_show_warning": "Ipakita ang Mga Babala",
-                "logs_show_error": "Ipakita ang Mga Error",
-                "logs_tooltip": "Tingnan ang mga mensahe ng log ng aplikasyon",
-                "logs_show_info_tooltip": "Ipakita ang mga mensahe ng log na impormasyon",
-                "logs_show_warning_tooltip": "Ipakita ang mga mensahe ng log na babala",
-                "logs_show_error_tooltip": "Ipakita ang mga mensahe ng log na error",
-                "logs_group": "Mga Log ng Aplikasyon",
-                "filter_group": "Mga Filter ng Log",
-                "actions_group_logs": "Mga Aksyon ng Log",
-                "about": "Tungkol sa:",
-                "about_tooltip": "Tingnan ang impormasyon tungkol sa aplikasyon",
-                "license": "Lisensya",
-                "license_tooltip": "Tingnan ang mga detalye ng lisensya ng software",
-                "about_group": "Tungkol sa Advanced Tab Manager",
-                "license_group": "Lisensya",
-                "tab_main": "Pangunahin",
-                "tab_advanced": "Advanced",
-                "tab_settings": "Mga Setting",
-                "tab_system": "System",
-                "tab_logs": "Mga Log",
-                "tab_about": "Tungkol sa",
-                "status_ready": "Handa",
-                "status_running": "Nagrarun...",
-                "status_stopped": "Huminto",
-                "status_idle": "Walang Ginagawa",
-                "error": "Error",
-                "please_enter_valid_url": "Mangyaring magpasok ng wastong URL!",
-                "developed_by": "Binuo ni: ",
-                "github": "GitHub: ",
-                "version": "Bersyon: ",
-                "description": "Paglalarawan: "
-            }
+        import importlib
+        translations = {}
+        
+        # Language file mapping
+        lang_files = {
+            "English": "en",
+            "Japanese": "ja", 
+            "Korean": "ko",
+            "Chinese": "zh",
+            "Filipino": "fil"
         }
-        lang = translations.get(language, translations["English"])
+        
+        # Load translations from separate files
+        for lang_name, file_name in lang_files.items():
+            try:
+                module = importlib.import_module(f".translations.{file_name}", package=__package__)
+                translations[lang_name] = module.translations
+            except ImportError as e:
+                print(f"Failed to load translations for {lang_name}: {e}")
+                # Fallback to English if available
+                if "English" in translations:
+                    translations[lang_name] = translations["English"]
+                else:
+                    translations[lang_name] = {}
+        
+        lang = translations.get(language, translations.get("English", {}))
         self.update_ui_text(lang)
 
     def update_ui_text(self, translations):
@@ -2457,6 +1895,9 @@ class MainWindow(QMainWindow):
         self.tab_widget.setTabText(0, translations["tab_main"])
 
         # Advanced Tab
+        self.browser_text_label.setText(translations["browser_selection"])
+        self.browser_combo.setToolTip(translations["advanced_browser_tooltip"])
+        self.browser_group.setTitle(translations["browser_selection_group"])
         self.headless_checkbox.setText(translations["advanced_headless"])
         self.headless_checkbox.setToolTip(translations["advanced_headless_tooltip"])
         self.disable_gpu_checkbox.setText(translations["advanced_disable_gpu"])
@@ -2475,6 +1916,12 @@ class MainWindow(QMainWindow):
         self.no_sandbox_checkbox.setToolTip(translations["advanced_no_sandbox_tooltip"])
         self.disable_dev_shm_checkbox.setText(translations["advanced_disable_dev_shm"])
         self.disable_dev_shm_checkbox.setToolTip(translations["advanced_disable_dev_shm_tooltip"])
+        self.proxy_checkbox.setText(translations["advanced_proxy"])
+        self.proxy_checkbox.setToolTip(translations["advanced_proxy_tooltip"])
+        self.proxy_text_label.setText(translations["advanced_proxy_address"])
+        self.proxy_address_input.setToolTip(translations["advanced_proxy_address_tooltip"])
+        self.test_proxy_button.setText(translations["advanced_test_proxy"])
+        self.test_proxy_button.setToolTip(translations["advanced_test_proxy_tooltip"])
         self.user_agent_text_label.setText(translations["advanced_user_agent"])
         self.browser_options_group.setTitle(translations["browser_options_group"])
         self.user_agent_group.setTitle(translations["user_agent_group"])
@@ -2492,6 +1939,10 @@ class MainWindow(QMainWindow):
         self.save_settings_button.setToolTip(translations["settings_save_tooltip"])
         self.load_settings_button.setText(translations["settings_load"])
         self.load_settings_button.setToolTip(translations["settings_load_tooltip"])
+        self.export_settings_button.setText(translations["settings_export_settings"])
+        self.export_settings_button.setToolTip(translations["settings_export_settings_tooltip"])
+        self.import_settings_button.setText(translations["settings_import"])
+        self.import_settings_button.setToolTip(translations["settings_import_tooltip"])
         self.reset_settings_button.setText(translations["settings_reset"])
         self.reset_settings_button.setToolTip(translations["settings_reset_tooltip"])
         self.export_log_button.setText(translations["settings_export"])
@@ -2651,8 +2102,8 @@ class MainWindow(QMainWindow):
     def reset_to_default_settings(self):
         """Reset all settings to their default values."""
         reply = QMessageBox.question(
-            self, "Reset Settings",
-            "Are you sure you want to reset all settings to their default values?\n\nThis action cannot be undone.",
+            self, self.translations.get("reset_settings_title", "Reset Settings"),
+            self.translations.get("reset_settings_message", "Are you sure you want to reset all settings to their default values?\n\nThis action cannot be undone."),
             QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
             QMessageBox.StandardButton.No
         )

@@ -1,0 +1,1 @@
+# Translation module for Advanced Tab Manager
