@@ -7,7 +7,9 @@ def resource_path(relative_path):
     if hasattr(sys, '_MEIPASS'):
         return os.path.join(sys._MEIPASS, relative_path)
     else:
-        return os.path.join(os.path.dirname(__file__), relative_path)
+        # Get the parent directory of utils (which is advancedtabmanager)
+        base_dir = os.path.dirname(os.path.dirname(__file__))
+        return os.path.join(base_dir, relative_path)
 
 def setup_logging():
     """Setup logging configuration."""
