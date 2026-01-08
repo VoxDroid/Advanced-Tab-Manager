@@ -291,4 +291,5 @@ translations = {
     "update_check_failed": "アップデートのチェックに失敗しました: {error}",
     "update_check_failed_title": "アップデートチェック失敗",
     "update_check_failed_text": "アップデートを確認できません。",
+    "log_linux_stability_options": "Linux固有の安定性オプションを適用しました: --disable-dev-shm-usage, --no-first-run, --disable-default-apps",
 }

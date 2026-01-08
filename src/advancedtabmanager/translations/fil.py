@@ -291,4 +291,5 @@ translations = {
     "update_check_failed": "Nabigo ang pag-check ng mga update: {error}",
     "update_check_failed_title": "Nabigo ang Pag-check ng Update",
     "update_check_failed_text": "Hindi maaaring suriin ang mga update.",
+    "log_linux_stability_options": "Inilapat ang mga Linux-specific na opsyon sa katatagan: --disable-dev-shm-usage, --no-first-run, --disable-default-apps",
 }

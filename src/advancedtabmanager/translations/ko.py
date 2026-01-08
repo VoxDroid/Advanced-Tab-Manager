@@ -293,4 +293,5 @@ translations = {
     "update_check_failed": "업데이트 확인에 실패했습니다: {error}",
     "update_check_failed_title": "업데이트 확인 실패",
     "update_check_failed_text": "업데이트를 확인할 수 없습니다.",
+    "log_linux_stability_options": "Linux 특정 안정성 옵션 적용됨: --disable-dev-shm-usage, --no-first-run, --disable-default-apps",
 }

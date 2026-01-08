@@ -164,16 +164,28 @@ class BrowserThread(QThread):
                 raise WebDriverException(f"{self.browser_type.capitalize()}Driver service failed to start on port {self.service.port} for instance {self.instance_id}")
 
             try:
+                # Add connection stability options for Linux
+                import platform
+                connection_timeout = 30  # seconds
+                if platform.system() == 'Linux':
+                    connection_timeout = 60  # Longer timeout on Linux for stability
+                
                 if self.browser_type == 'chrome':
                     driver = webdriver.Remote(
                         command_executor=f"http://127.0.0.1:{self.service.port}",
-                        options=self.browser_options
+                        options=self.browser_options,
+                        keep_alive=True  # Keep connection alive
                     )
                 elif self.browser_type == 'firefox':
                     driver = webdriver.Remote(
                         command_executor=f"http://127.0.0.1:{self.service.port}",
-                        options=self.browser_options
+                        options=self.browser_options,
+                        keep_alive=True  # Keep connection alive
                     )
+                
+                # Set implicit wait for better stability
+                driver.implicitly_wait(10)
+                
                 self.driver = driver
             except WebDriverException as e:
                 error_msg = str(e).lower()
@@ -264,7 +276,30 @@ class BrowserThread(QThread):
                             else:
                                 break  # Give up if reinitialization fails
 
-                        self.driver.execute_script(f"window.open('{self.url}', '_blank');")
+                        # Execute script with retry logic for connection issues
+                        max_script_retries = 3
+                        script_retry_count = 0
+                        script_success = False
+                        
+                        while script_retry_count < max_script_retries and not script_success:
+                            try:
+                                self.driver.execute_script(f"window.open('{self.url}', '_blank');")
+                                script_success = True
+                            except Exception as script_e:
+                                script_retry_count += 1
+                                error_str = str(script_e).lower()
+                                
+                                # Check if this is a connection-related error that we should retry
+                                connection_errors = ['connection aborted', 'remote end closed', 'connection reset', 'broken pipe', 'connection refused']
+                                is_connection_error = any(err in error_str for err in connection_errors)
+                                
+                                if is_connection_error and script_retry_count < max_script_retries:
+                                    self.log_message.emit(f"Connection error during script execution for instance {self.instance_id}, retrying ({script_retry_count}/{max_script_retries}): {str(script_e)}", "WARNING")
+                                    time.sleep(1)  # Brief pause before retry
+                                    continue
+                                else:
+                                    # Re-raise the exception if it's not a connection error or we've exhausted retries
+                                    raise script_e
 
                         # Check driver validity after script execution
                         if not self.is_driver_valid():
@@ -330,12 +365,27 @@ class BrowserThread(QThread):
                         self.log_message.emit(f"Instance {self.instance_id}, Cycle {iteration}: Opened new tab, total tabs: {len(handles)}", "INFO")
                     except WebDriverException as e:
                         consecutive_errors += 1
-                        # Suppress marionette errors (Firefox connection lost) and errors during shutdown
+                        # Suppress marionette errors (Firefox connection lost), connection errors, and errors during shutdown
                         error_msg = str(e).lower()
-                        should_suppress = self.stop_requested or 'marionette' in error_msg or 'connection' in error_msg
+                        should_suppress = (self.stop_requested or 'marionette' in error_msg or 'connection' in error_msg or 
+                                         'remote end closed' in error_msg or 'connection aborted' in error_msg or
+                                         'connection reset' in error_msg or 'broken pipe' in error_msg)
+                        
+                        is_connection_error = ('connection aborted' in error_msg or 'remote end closed' in error_msg or 
+                                             'connection reset' in error_msg or 'broken pipe' in error_msg)
+                        
                         if not should_suppress:
                             self.error_occurred.emit(f"Browser error for instance {self.instance_id}: {str(e)}")
                             self.log_message.emit(f"Browser error occurred for instance {self.instance_id}: {str(e)}", "ERROR")
+
+                        # Try to recover from connection errors
+                        if is_connection_error and not self.stop_requested:
+                            if self._try_reinitialize_driver():
+                                self.log_message.emit(f"Driver recovered from WebDriver connection error for instance {self.instance_id}, continuing", "INFO")
+                                continue  # Continue the while loop with the new driver
+                            else:
+                                self.log_message.emit(f"Failed to recover from WebDriver connection error for instance {self.instance_id}: {str(e)}", "ERROR")
+                                return
 
                         # Performance optimization: if too many consecutive errors, add delay
                         if consecutive_errors > 3:
@@ -343,9 +393,24 @@ class BrowserThread(QThread):
                         break
                     except Exception as e:
                         consecutive_errors += 1
+                        error_msg = str(e).lower()
+                        is_connection_error = ('connection aborted' in error_msg or 'remote end closed' in error_msg or 
+                                             'connection reset' in error_msg or 'broken pipe' in error_msg)
+                        
                         if not self.stop_requested:
-                            self.error_occurred.emit(f"Unexpected error during tab operation for instance {self.instance_id}: {str(e)}")
-                            self.log_message.emit(f"Unexpected error during tab operation for instance {self.instance_id}: {str(e)}", "ERROR")
+                            if is_connection_error:
+                                self.log_message.emit(f"Connection error during tab operation for instance {self.instance_id}, attempting recovery: {str(e)}", "WARNING")
+                                # Try to reinitialize the driver for connection errors
+                                if self._try_reinitialize_driver():
+                                    self.log_message.emit(f"Driver recovered from connection error for instance {self.instance_id}, continuing", "INFO")
+                                    continue  # Continue the while loop with the new driver
+                                else:
+                                    self.error_occurred.emit(f"Failed to recover from connection error for instance {self.instance_id}: {str(e)}")
+                                    self.log_message.emit(f"Failed to recover from connection error for instance {self.instance_id}: {str(e)}", "ERROR")
+                                    return
+                            else:
+                                self.error_occurred.emit(f"Unexpected error during tab operation for instance {self.instance_id}: {str(e)}")
+                                self.log_message.emit(f"Unexpected error during tab operation for instance {self.instance_id}: {str(e)}", "ERROR")
 
                         # Performance optimization: if too many consecutive errors, add delay
                         if consecutive_errors > 3:

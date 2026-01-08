@@ -291,4 +291,5 @@ translations = {
     "update_check_failed": "检查更新失败: {error}",
     "update_check_failed_title": "更新检查失败",
     "update_check_failed_text": "无法检查更新。",
+    "log_linux_stability_options": "已应用Linux特定稳定性选项: --disable-dev-shm-usage, --no-first-run, --disable-default-apps",
 }

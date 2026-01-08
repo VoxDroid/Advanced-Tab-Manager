@@ -1607,6 +1607,13 @@ class MainWindow(QMainWindow):
             browser_options.add_argument("--disable-backgrounding-occluded-windows")
             browser_options.add_argument("--disable-renderer-backgrounding")
             
+            # Linux-specific stability options (automatically enabled)
+            if os.name == 'posix':
+                browser_options.add_argument("--disable-dev-shm-usage")  # Prevent shared memory issues on Linux
+                browser_options.add_argument("--no-first-run")  # Skip first run prompts
+                browser_options.add_argument("--disable-default-apps")  # Disable default app installation
+                self.log_message(self.translations.get("log_linux_stability_options", "Applied Linux-specific stability options: --disable-dev-shm-usage, --no-first-run, --disable-default-apps"), "DEBUG")
+            
             if self.disable_notifications_checkbox.isChecked():
                 browser_options.add_argument("--disable-notifications")
             if self.disable_web_security_checkbox.isChecked():
@@ -1614,8 +1621,8 @@ class MainWindow(QMainWindow):
             # Only add sandbox options if explicitly needed (usually for containers)
             if self.no_sandbox_checkbox.isChecked():
                 browser_options.add_argument("--no-sandbox")
-            # Only add dev-shm-usage on Linux, not Windows
-            if self.disable_dev_shm_checkbox.isChecked() and os.name == 'posix':
+            # On Windows, allow user to choose dev-shm-usage option
+            elif os.name != 'posix' and self.disable_dev_shm_checkbox.isChecked():
                 browser_options.add_argument("--disable-dev-shm-usage")
         elif browser_type == 'firefox':
             if self.disable_notifications_checkbox.isChecked():

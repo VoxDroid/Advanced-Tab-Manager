@@ -293,4 +293,5 @@ translations = {
     "update_check_failed": "Failed to check for updates: {error}",
     "update_check_failed_title": "Update Check Failed",
     "update_check_failed_text": "Unable to check for updates.",
+    "log_linux_stability_options": "Applied Linux-specific stability options: --disable-dev-shm-usage, --no-first-run, --disable-default-apps",
 }
