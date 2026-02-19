@@ -1,7 +1,7 @@
 [tool.briefcase]
 project_name = "AdvancedTabManager"
 bundle = "com.advtabman"
-version = "1.3.0"
+version = "1.4.0"
 url = "https://github.com/VoxDroid/Advanced-Tab-Manager"
 license.file = "LICENSE"
 author = "VoxDroid"
@@ -34,7 +34,7 @@ test_requires = [
 
 
 [tool.briefcase.app.advancedtabmanager.macOS]
-universal_build = true
+universal_build = false
 requires = [
 ]
 

@@ -2,7 +2,7 @@ import requests
 from packaging import version
 from PyQt6.QtCore import QThread, pyqtSignal
 
-CURRENT_VERSION = "1.3.0"
+CURRENT_VERSION = "1.4.0"
 GITHUB_REPO = "VoxDroid/Advanced-Tab-Manager"
 
 class VersionChecker(QThread):

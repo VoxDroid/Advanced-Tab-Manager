@@ -15,8 +15,8 @@ Security updates are provided for the following versions of **Advanced Tab Manag
 
 | Version | Supported          |
 |---------|--------------------|
-| v1.3.0  | ✅                |
-| < 1.3.0 | ❌ (Please update) |
+| v1.4.0  | ✅                |
+| < 1.4.0 | ❌ (Please update) |
 
 We recommend always using the latest version to ensure you have the most recent security patches. Check the [Releases](https://github.com/VoxDroid/Advanced-Tab-Manager/releases) page for the latest version.
 

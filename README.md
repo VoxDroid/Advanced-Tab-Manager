@@ -40,7 +40,7 @@
     <img src="https://img.shields.io/badge/platform-Windows%20%7C%20macOS%20%7C%20Linux-lightgrey" alt="Platforms">
   </a>
   <a href="https://github.com/VoxDroid/Advanced-Tab-Manager/releases">
-    <img src="https://img.shields.io/badge/version-v1.3.0-brightgreen" alt="Version">
+    <img src="https://img.shields.io/badge/version-v1.4.0-brightgreen" alt="Version">
   </a>
   <a>
     <img src="https://img.shields.io/github/v/release/VoxDroid/Advanced-Tab-Manager?label=Latest%20Release" alt="Latest Release">

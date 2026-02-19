@@ -12,7 +12,7 @@ env:
   src: 'advancedtabmanager' 
   secret: 'ATM'
   draft: 'Advanced Tab Manager'
-  fedver: 'fc42'
+  fedver: 'fc43'
 
 jobs:
   check-for-building:
@@ -302,7 +302,7 @@ jobs:
   build-macos-x86_64:
     needs: check-for-building
     if: needs.check-for-building.outputs.match == 'true'
-    runs-on: macos-13
+    runs-on: macos-15-intel
 
     steps:
       - name: Check out repository

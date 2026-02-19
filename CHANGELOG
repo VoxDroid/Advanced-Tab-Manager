@@ -1,5 +1,30 @@
 # AdvancedTabManager Release Notes
 
+## v1.4.0 (19 Feb 2026)
+A maintenance release focused on driver reliability (macOS Apple Silicon fixes), internationalization, modular refactors, and improved browser options.
+
+### Added
+- Full translation support for UI and log messages (English, Japanese, Korean, Chinese, Filipino). (commit 58180ad)
+- Advanced browser options and an integrated Proxy Test UI (ProxyTestThread). (commit f836931)
+- Firefox automation support via Selenium (service + driver handling). (commit 40356df)
+- Driver verification and fallback utilities (`_verify_executable`, `_install_driver`). (commit 836c733)
+
+### Fixed
+- Detect and gracefully handle `Exec format error` for driver binaries (architecture mismatch on Apple Silicon); added fallbacks and clearer error reporting. (commit 836c733)
+- Guard accesses to `Service.process` during start/stop/cleanup to avoid runtime warnings and crashes. (commit 836c733)
+- Linux connection-stability improvements and more robust WebDriver retry handling. (commit 143ee9a)
+- `resource_path` bug fix to resolve resources from the project root. (commit 4c48ac9)
+
+### Changed / Refactored
+- Refactor translations into external files and improve i18n handling. (commits 611548a, 58180ad)
+- Modular refactor of the main app into components for better maintainability and testing. (commit 40356df)
+- Improved driver/process cleanup and logging for more reliable shutdowns. (commit 836c733)
+
+### Docs / Chores
+- Documentation updates, new issue/PR templates, and README improvements. (commits 8f65a20, 2fddef7, c80bbd6, 04d9bee, 3afe261)
+- Dependency and packaging updates (`requirements.txt`, `pyproject.toml`). (commit a6ef607)
+- CI/workflow and repository metadata updates (build, funding, .gitignore). (commits 4aabdd1, 5aec6ee, 5c0661a)
+
 ##  (12 Apr 2025)
 - Added Version Checking
 - Briefcase Integrations

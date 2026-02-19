@@ -32,7 +32,7 @@ from .ui.log_viewer import LogViewer
 from .config.settings_manager import SettingsManager
 from .utils.logger import Logger, resource_path
 
-CURRENT_VERSION = "1.3.0"
+CURRENT_VERSION = "1.4.0"
 GITHUB_REPO = "VoxDroid/Advanced-Tab-Manager"
 
 
