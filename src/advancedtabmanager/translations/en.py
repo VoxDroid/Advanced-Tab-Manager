@@ -294,4 +294,10 @@ translations = {
     "update_check_failed_title": "Update Check Failed",
     "update_check_failed_text": "Unable to check for updates.",
     "log_linux_stability_options": "Applied Linux-specific stability options: --disable-dev-shm-usage, --no-first-run, --disable-default-apps",
+    "log_exec_format_error": "Exec format error starting driver — binary architecture mismatch or invalid executable.",
+    "log_driver_fallback_path": "Downloaded driver binary appears incompatible; falling back to driver found in PATH: {path}",
+    "log_no_service_process": "No Service.process attribute available; skipping process tracking for instance {instance_id}",
+    "log_service_no_process": "Service has no running process for instance {instance_id}, skipping stop",
+    "log_found_alternative_driver": "Found usable driver binary for alternative architecture: {path}",
+    "log_no_compatible_driver_found": "No usable driver binary found for this Chrome/OS combination; please install matching driver in PATH or download the correct architecture.",
 }

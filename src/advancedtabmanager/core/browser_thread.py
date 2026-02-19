@@ -1,6 +1,10 @@
 import time
 import random
 import socket
+import os
+import shutil
+import stat
+import subprocess
 import psutil
 from PyQt6.QtCore import QThread, pyqtSignal, QTimer
 from selenium import webdriver
@@ -48,6 +52,76 @@ class BrowserThread(QThread):
                 hasattr(self.driver, 'switch_to') and
                 hasattr(self.driver, 'close'))
 
+    def _verify_executable(self, path):
+        """Verify a downloaded driver is an executable and runnable.
+        Returns True if the binary looks valid, False for known Exec-format errors.
+        """
+        try:
+            if not os.path.isfile(path):
+                return False
+
+            # Ensure executable bit is set where possible
+            try:
+                if not os.access(path, os.X_OK):
+                    os.chmod(path, 0o755)
+            except Exception:
+                pass
+
+            # Run `--version` to detect architecture/format issues quickly
+            subprocess.run([path, "--version"], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, timeout=5, check=True)
+            return True
+        except subprocess.CalledProcessError:
+            # Binary ran but returned non-zero; treat as valid for our purposes
+            return True
+        except OSError as e:
+            # Errno 8 == Exec format error on POSIX systems
+            if getattr(e, 'errno', None) == 8 or 'exec format' in str(e).lower():
+                return False
+            raise
+        except Exception:
+            return False
+
+    def _install_driver(self, browser_type: str):
+        """Install driver via webdriver-manager and sanity-check the binary.
+        Falls back to a driver found in PATH if the downloaded binary appears invalid.
+        Raises OSError on unrecoverable failures.
+        """
+        if browser_type == 'chrome':
+            path = ChromeDriverManager().install()
+        elif browser_type == 'firefox':
+            path = GeckoDriverManager().install()
+        else:
+            raise ValueError(f"Unsupported browser type: {browser_type}")
+
+        # Verify downloaded binary; attempt alternate-arch binaries in the same release folder,
+        # then fallback to PATH if mismatch (common on mac M1/x86 mismatch).
+        if not self._verify_executable(path):
+            # 1) Try to find alternate architecture binaries in the same release directory
+            try:
+                release_dir = os.path.dirname(os.path.dirname(path))
+                if os.path.isdir(release_dir):
+                    for entry in os.listdir(release_dir):
+                        candidate_dir = os.path.join(release_dir, entry)
+                        candidate_path = os.path.join(candidate_dir, os.path.basename(path))
+                        if candidate_path == path:
+                            continue
+                        if os.path.isfile(candidate_path) and self._verify_executable(candidate_path):
+                            self.log_message.emit(self.translations.get("log_found_alternative_driver", "Found usable driver binary for alternative architecture: {path}").format(path=candidate_path), "WARNING")
+                            return candidate_path
+            except Exception:
+                pass
+
+            # 2) Fallback to driver in PATH
+            fallback = shutil.which('chromedriver' if browser_type == 'chrome' else 'geckodriver')
+            if fallback and self._verify_executable(fallback):
+                self.log_message.emit(self.translations.get("log_driver_fallback_path", "Downloaded driver binary appears incompatible; falling back to driver found in PATH: {path}").format(path=fallback), "WARNING")
+                return fallback
+
+            # 3) Nothing usable found — surface a clear OSError so caller can report it
+            raise OSError(f"Downloaded driver binary appears unusable (possible architecture mismatch): {path}")
+
+        return path
+
     def _try_reinitialize_driver(self):
         """Attempt to reinitialize the WebDriver if it became invalid."""
         # Don't reinitialize if stop was requested
@@ -74,12 +148,22 @@ class BrowserThread(QThread):
 
             # Reinitialize service
             if self.browser_type == 'chrome':
-                self.service = ChromeService(ChromeDriverManager().install(), port=self.port)
+                driver_path = self._install_driver('chrome')
+                self.service = ChromeService(driver_path, port=self.port)
             elif self.browser_type == 'firefox':
-                self.service = FirefoxService(GeckoDriverManager().install(), port=self.port)
+                driver_path = self._install_driver('firefox')
+                self.service = FirefoxService(driver_path, port=self.port)
 
-            # Start service
-            self.service.start()
+            # Start service (handle Exec format / architecture mismatches cleanly)
+            try:
+                self.service.start()
+            except OSError as e:
+                if getattr(e, 'errno', None) == 8 or 'exec format' in str(e).lower():
+                    # Known cause: wrong architecture binary (e.g. arm64 vs x86_64 on macOS)
+                    self.log_message.emit(self.translations.get("log_exec_format_error", "Exec format error starting driver — binary architecture mismatch or invalid executable."), "ERROR")
+                    return False
+                raise
+
             if not self.wait_for_service(port=self.service.port, timeout=15):  # Longer timeout for reinitialization
                 return False
 
@@ -147,9 +231,11 @@ class BrowserThread(QThread):
 
             # Create service in background thread to avoid blocking UI
             if self.browser_type == 'chrome':
-                self.service = ChromeService(ChromeDriverManager().install(), port=self.port)
+                driver_path = self._install_driver('chrome')
+                self.service = ChromeService(driver_path, port=self.port)
             elif self.browser_type == 'firefox':
-                self.service = FirefoxService(GeckoDriverManager().install(), port=self.port)
+                driver_path = self._install_driver('firefox')
+                self.service = FirefoxService(driver_path, port=self.port)
             else:
                 raise ValueError(f"Unsupported browser type: {self.browser_type}")
 
@@ -158,7 +244,14 @@ class BrowserThread(QThread):
                 self.service.port = self.port
                 self.log_message.emit(self.translations.get("log_port_in_use", "Port {old_port} was in use, switching to new port {new_port}").format(old_port=self.port, new_port=self.port), "WARNING")
 
-            self.service.start()
+            try:
+                self.service.start()
+            except OSError as e:
+                if getattr(e, 'errno', None) == 8 or 'exec format' in str(e).lower():
+                    self.error_occurred.emit(f"Exec format error when starting driver for instance {self.instance_id}: {str(e)}")
+                    self.log_message.emit(self.translations.get("log_exec_format_error", "Exec format error starting driver — binary architecture mismatch or invalid executable."), "ERROR")
+                    return
+                raise
 
             if not self.wait_for_service(port=self.service.port):
                 raise WebDriverException(f"{self.browser_type.capitalize()}Driver service failed to start on port {self.service.port} for instance {self.instance_id}")
@@ -207,7 +300,15 @@ class BrowserThread(QThread):
                 self.log_message.emit(self.translations.get("log_failed_init_webdriver", "Failed to initialize WebDriver for instance {instance_id}: {error}").format(instance_id=self.instance_id, error=str(e)), "ERROR")
                 return
 
-            self.driver_process = psutil.Process(self.service.process.pid)
+            try:
+                if hasattr(self.service, 'process') and getattr(self.service, 'process') is not None and getattr(self.service.process, 'pid', None):
+                    self.driver_process = psutil.Process(self.service.process.pid)
+                else:
+                    self.driver_process = None
+                    self.log_message.emit(self.translations.get("log_no_service_process", "No Service.process attribute available; skipping process tracking for instance {instance_id}").format(instance_id=self.instance_id), "WARNING")
+            except Exception as e:
+                self.driver_process = None
+                self.log_message.emit(self.translations.get("log_cannot_track_process", "Could not track browser process for instance {instance_id}: {error}").format(instance_id=self.instance_id, error=str(e)), "WARNING")
 
             # Track only the specific browser process we created, not all browser processes
             try:
@@ -228,8 +329,13 @@ class BrowserThread(QThread):
                     except (psutil.NoSuchProcess, psutil.AccessDenied):
                         pass
                 elif self.browser_type == 'firefox':
-                    # Firefox usually runs as a single process
-                    browser_pid = self.service.process.pid
+                    # Firefox usually runs as a single process. Guard access to service.process.
+                    browser_pid = None
+                    if hasattr(self.service, 'process') and getattr(self.service, 'process') is not None:
+                        try:
+                            browser_pid = self.service.process.pid
+                        except Exception:
+                            browser_pid = None
 
                 if browser_pid:
                     self.browser_processes = [psutil.Process(browser_pid)]
@@ -462,7 +568,16 @@ class BrowserThread(QThread):
         def cleanup_service():
             try:
                 if self.service:
-                    self.service.stop()
+                    # Some Service instances never populated `.process` if start() failed — avoid calling
+                    # stop() in that case because selenium's stop() implementation may expect `.process` to exist.
+                    if hasattr(self.service, 'process') and getattr(self.service, 'process'):
+                        try:
+                            self.service.stop()
+                        except Exception as e:
+                            self.log_message.emit(f"Failed to stop service for instance {self.instance_id}: {str(e)}", "WARNING")
+                    else:
+                        # Nothing to stop; avoid invoking stop() which may access `.process` internally.
+                        self.log_message.emit(self.translations.get("log_service_no_process", "Service has no running process for instance {instance_id}, skipping stop").format(instance_id=self.instance_id), "INFO")
             except Exception as e:
                 self.log_message.emit(f"Failed to stop service for instance {self.instance_id}: {str(e)}", "WARNING")
 
