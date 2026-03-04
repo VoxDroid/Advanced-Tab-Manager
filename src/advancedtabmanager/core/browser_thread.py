@@ -6,6 +6,7 @@ import shutil
 import stat
 import subprocess
 import tempfile
+import threading
 import psutil
 from PyQt6.QtCore import QThread, pyqtSignal, QTimer
 from selenium import webdriver
@@ -23,6 +24,12 @@ class BrowserThread(QThread):
     update_cycle = pyqtSignal(int)
     log_message = pyqtSignal(str, str)
     error_occurred = pyqtSignal(str)
+
+    # Class-level lock and cache for driver installation.
+    # webdriver_manager is NOT thread-safe: concurrent calls crash on
+    # Windows (access violation) especially with free-threaded Python 3.13+/3.14.
+    _driver_install_lock = threading.Lock()
+    _driver_path_cache: dict[str, str] = {}  # browser_type -> installed path
 
     def __init__(self, url, iterations, interval, browser_options, instance_id, browser_type='chrome', translations=None):
         super().__init__()
@@ -108,46 +115,61 @@ class BrowserThread(QThread):
         """Install driver via webdriver-manager and sanity-check the binary.
         Falls back to a driver found in PATH if the downloaded binary appears invalid.
         Raises OSError on unrecoverable failures.
+
+        Installation is serialized across all BrowserThread instances via a
+        class-level lock because webdriver_manager is NOT thread-safe.
         """
-        if browser_type == 'chrome':
-            path = ChromeDriverManager().install()
-        elif browser_type == 'firefox':
-            path = GeckoDriverManager().install()
-        else:
-            raise ValueError(f"Unsupported browser type: {browser_type}")
+        with BrowserThread._driver_install_lock:
+            # Return cached path if a previous thread already installed this driver
+            if browser_type in BrowserThread._driver_path_cache:
+                cached = BrowserThread._driver_path_cache[browser_type]
+                if os.path.isfile(cached):
+                    self.log_message.emit(
+                        f"Using cached {browser_type} driver: {cached}", "INFO")
+                    return cached
 
-        # On macOS, clear quarantine attributes and ad-hoc sign the driver binary
-        # to prevent Gatekeeper from silently blocking it (common on Sequoia+).
-        self._clear_macos_quarantine(path)
+            if browser_type == 'chrome':
+                path = ChromeDriverManager().install()
+            elif browser_type == 'firefox':
+                path = GeckoDriverManager().install()
+            else:
+                raise ValueError(f"Unsupported browser type: {browser_type}")
 
-        # Verify downloaded binary; attempt alternate-arch binaries in the same release folder,
-        # then fallback to PATH if mismatch (common on mac M1/x86 mismatch).
-        if not self._verify_executable(path):
-            # 1) Try to find alternate architecture binaries in the same release directory
-            try:
-                release_dir = os.path.dirname(os.path.dirname(path))
-                if os.path.isdir(release_dir):
-                    for entry in os.listdir(release_dir):
-                        candidate_dir = os.path.join(release_dir, entry)
-                        candidate_path = os.path.join(candidate_dir, os.path.basename(path))
-                        if candidate_path == path:
-                            continue
-                        if os.path.isfile(candidate_path) and self._verify_executable(candidate_path):
-                            self.log_message.emit(self.translations.get("log_found_alternative_driver", "Found usable driver binary for alternative architecture: {path}").format(path=candidate_path), "WARNING")
-                            return candidate_path
-            except Exception:
-                pass
+            # On macOS, clear quarantine attributes and ad-hoc sign the driver binary
+            # to prevent Gatekeeper from silently blocking it (common on Sequoia+).
+            self._clear_macos_quarantine(path)
 
-            # 2) Fallback to driver in PATH
-            fallback = shutil.which('chromedriver' if browser_type == 'chrome' else 'geckodriver')
-            if fallback and self._verify_executable(fallback):
-                self.log_message.emit(self.translations.get("log_driver_fallback_path", "Downloaded driver binary appears incompatible; falling back to driver found in PATH: {path}").format(path=fallback), "WARNING")
-                return fallback
+            # Verify downloaded binary; attempt alternate-arch binaries in the same release folder,
+            # then fallback to PATH if mismatch (common on mac M1/x86 mismatch).
+            if not self._verify_executable(path):
+                # 1) Try to find alternate architecture binaries in the same release directory
+                try:
+                    release_dir = os.path.dirname(os.path.dirname(path))
+                    if os.path.isdir(release_dir):
+                        for entry in os.listdir(release_dir):
+                            candidate_dir = os.path.join(release_dir, entry)
+                            candidate_path = os.path.join(candidate_dir, os.path.basename(path))
+                            if candidate_path == path:
+                                continue
+                            if os.path.isfile(candidate_path) and self._verify_executable(candidate_path):
+                                self.log_message.emit(self.translations.get("log_found_alternative_driver", "Found usable driver binary for alternative architecture: {path}").format(path=candidate_path), "WARNING")
+                                BrowserThread._driver_path_cache[browser_type] = candidate_path
+                                return candidate_path
+                except Exception:
+                    pass
 
-            # 3) Nothing usable found — surface a clear OSError so caller can report it
-            raise OSError(f"Downloaded driver binary appears unusable (possible architecture mismatch): {path}")
+                # 2) Fallback to driver in PATH
+                fallback = shutil.which('chromedriver' if browser_type == 'chrome' else 'geckodriver')
+                if fallback and self._verify_executable(fallback):
+                    self.log_message.emit(self.translations.get("log_driver_fallback_path", "Downloaded driver binary appears incompatible; falling back to driver found in PATH: {path}").format(path=fallback), "WARNING")
+                    BrowserThread._driver_path_cache[browser_type] = fallback
+                    return fallback
 
-        return path
+                # 3) Nothing usable found — surface a clear OSError so caller can report it
+                raise OSError(f"Downloaded driver binary appears unusable (possible architecture mismatch): {path}")
+
+            BrowserThread._driver_path_cache[browser_type] = path
+            return path
 
     def _try_reinitialize_driver(self):
         """Attempt to reinitialize the WebDriver if it became invalid."""
