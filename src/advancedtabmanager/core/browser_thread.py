@@ -5,6 +5,7 @@ import os
 import shutil
 import stat
 import subprocess
+import tempfile
 import psutil
 from PyQt6.QtCore import QThread, pyqtSignal, QTimer
 from selenium import webdriver
@@ -81,6 +82,28 @@ class BrowserThread(QThread):
         except Exception:
             return False
 
+    @staticmethod
+    def _clear_macos_quarantine(path):
+        """Remove macOS quarantine/provenance attributes and ad-hoc sign the
+        driver binary so that Gatekeeper does not silently block it.
+
+        On macOS Sequoia+ downloaded unsigned binaries carry
+        ``com.apple.provenance`` / ``com.apple.quarantine`` extended attributes
+        which cause the process to hang at launch without any error output.
+        """
+        import platform as _platform
+        if _platform.system() != 'Darwin':
+            return
+        try:
+            # Strip quarantine & provenance xattrs
+            subprocess.run(['xattr', '-cr', path],
+                           stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, timeout=5)
+            # Ad-hoc codesign so Gatekeeper accepts the binary
+            subprocess.run(['codesign', '--force', '--deep', '--sign', '-', path],
+                           stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, timeout=10)
+        except Exception:
+            pass  # Best-effort; _verify_executable will catch actual failures
+
     def _install_driver(self, browser_type: str):
         """Install driver via webdriver-manager and sanity-check the binary.
         Falls back to a driver found in PATH if the downloaded binary appears invalid.
@@ -92,6 +115,10 @@ class BrowserThread(QThread):
             path = GeckoDriverManager().install()
         else:
             raise ValueError(f"Unsupported browser type: {browser_type}")
+
+        # On macOS, clear quarantine attributes and ad-hoc sign the driver binary
+        # to prevent Gatekeeper from silently blocking it (common on Sequoia+).
+        self._clear_macos_quarantine(path)
 
         # Verify downloaded binary; attempt alternate-arch binaries in the same release folder,
         # then fallback to PATH if mismatch (common on mac M1/x86 mismatch).
@@ -147,16 +174,39 @@ class BrowserThread(QThread):
                     pass
 
             # Reinitialize service
+            # Ensure a driver log path exists for diagnostics
+            try:
+                tmpdir = tempfile.gettempdir()
+            except Exception:
+                tmpdir = '/tmp'
+            self._driver_log = os.path.join(tmpdir, f"chromedriver-reinit-{os.getpid()}-{self.instance_id}.log")
+
             if self.browser_type == 'chrome':
                 driver_path = self._install_driver('chrome')
-                self.service = ChromeService(driver_path, port=self.port)
+                self.service = ChromeService(driver_path, port=self.port, log_path=self._driver_log)
             elif self.browser_type == 'firefox':
                 driver_path = self._install_driver('firefox')
-                self.service = FirefoxService(driver_path, port=self.port)
+                self.service = FirefoxService(driver_path, port=self.port, log_path=getattr(self, '_driver_log', None))
 
             # Start service (handle Exec format / architecture mismatches cleanly)
             try:
                 self.service.start()
+            except WebDriverException as e:
+                # Surface driver logs and return False so caller can handle retry
+                rc = None
+                try:
+                    rc = getattr(self.service, 'process').returncode if getattr(self.service, 'process', None) else None
+                except Exception:
+                    rc = None
+                log_tail = ""
+                try:
+                    if getattr(self, '_driver_log', None) and os.path.exists(self._driver_log):
+                        with open(self._driver_log, 'r', encoding='utf-8', errors='replace') as f:
+                            log_tail = ''.join(f.readlines()[-200:])
+                except Exception:
+                    log_tail = "<failed to read chromedriver log>"
+                self.log_message.emit(f"WebDriverException starting driver during reinit (rc={rc}). Driver log:\n{log_tail}", "ERROR")
+                return False
             except OSError as e:
                 if getattr(e, 'errno', None) == 8 or 'exec format' in str(e).lower():
                     # Known cause: wrong architecture binary (e.g. arm64 vs x86_64 on macOS)
@@ -230,12 +280,20 @@ class BrowserThread(QThread):
             self.log_message.emit(self.translations.get("log_browser_thread_start", "Starting browser thread for instance {instance_id} on port {port}").format(instance_id=self.instance_id, port=self.port), "INFO")
 
             # Create service in background thread to avoid blocking UI
+            # Prepare a per-instance driver log so we can inspect chromedriver output if it crashes
+            try:
+                tmpdir = tempfile.gettempdir()
+            except Exception:
+                tmpdir = '/tmp'
+            self._driver_log = os.path.join(tmpdir, f"chromedriver-{os.getpid()}-{self.instance_id}.log")
+
             if self.browser_type == 'chrome':
                 driver_path = self._install_driver('chrome')
-                self.service = ChromeService(driver_path, port=self.port)
+                # Pass log_path to capture chromedriver stderr/stdout for diagnostics
+                self.service = ChromeService(driver_path, port=self.port, log_path=self._driver_log)
             elif self.browser_type == 'firefox':
                 driver_path = self._install_driver('firefox')
-                self.service = FirefoxService(driver_path, port=self.port)
+                self.service = FirefoxService(driver_path, port=self.port, log_path=getattr(self, '_driver_log', None))
             else:
                 raise ValueError(f"Unsupported browser type: {self.browser_type}")
 
@@ -246,6 +304,33 @@ class BrowserThread(QThread):
 
             try:
                 self.service.start()
+            except WebDriverException as e:
+                # Service process exited immediately — attach driver log (if available) and give actionable hints
+                rc = None
+                try:
+                    rc = getattr(self.service, 'process').returncode if getattr(self.service, 'process', None) else None
+                except Exception:
+                    rc = None
+
+                log_tail = ""
+                try:
+                    if getattr(self, '_driver_log', None) and os.path.exists(self._driver_log):
+                        with open(self._driver_log, 'r', encoding='utf-8', errors='replace') as f:
+                            log_tail = ''.join(f.readlines()[-200:])
+                except Exception:
+                    log_tail = "<failed to read chromedriver log>"
+
+                suggestions = ""
+                if rc == -9:
+                    suggestions = (
+                        "\nExit code -9 (SIGKILL): the OS forcibly killed ChromeDriver. Common causes on macOS: Gatekeeper/quarantine, incompatible binary/architecture, or external process supervision. "
+                        "Check `file {driver_path}`, `xattr -l {driver_path}`, and Chrome/ChromeDriver version compatibility."
+                    ).format(driver_path=getattr(self.service, 'executable_path', '<driver_path>'))
+
+                msg = f"{str(e)}\nReturn code: {rc}.{suggestions}\nDriver log ({getattr(self, '_driver_log', '<no-log>')}):\n{log_tail}"
+                self.log_message.emit(msg, "ERROR")
+                self.error_occurred.emit(f"Failed to start driver for instance {self.instance_id}: {str(e)}")
+                return
             except OSError as e:
                 if getattr(e, 'errno', None) == 8 or 'exec format' in str(e).lower():
                     self.error_occurred.emit(f"Exec format error when starting driver for instance {self.instance_id}: {str(e)}")
@@ -253,8 +338,18 @@ class BrowserThread(QThread):
                     return
                 raise
 
+            # If the service started but the socket never opened, include any driver logs we have
             if not self.wait_for_service(port=self.service.port):
-                raise WebDriverException(f"{self.browser_type.capitalize()}Driver service failed to start on port {self.service.port} for instance {self.instance_id}")
+                rc = getattr(self.service, 'process').returncode if getattr(self.service, 'process', None) else None
+                log_tail = ""
+                try:
+                    if getattr(self, '_driver_log', None) and os.path.exists(self._driver_log):
+                        with open(self._driver_log, 'r', encoding='utf-8', errors='replace') as f:
+                            log_tail = ''.join(f.readlines()[-200:])
+                except Exception:
+                    log_tail = "<failed to read chromedriver log>"
+
+                raise WebDriverException(f"{self.browser_type.capitalize()}Driver service failed to start on port {self.service.port} for instance {self.instance_id} (returncode={rc}). Driver log:\n{log_tail}")
 
             try:
                 # Add connection stability options for Linux
