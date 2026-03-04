@@ -286,7 +286,7 @@ translations = {
     "about_support": "支持:",
     "about_issues_page": "Issues页面",
     "about_license_text": "本软件根据{license}授权。详情请见{license}。",
-    "about_description": "Advanced Tab Manager是一个基于Python的桌面应用程序，使用PyQt6和Selenium构建。它提供了一个用户友好的界面，可以通过广泛的自定义选项以编程方式自动化Chrome标签页的打开和关闭。这个工具非常适合测试、模拟或重复的浏览器自动化任务。",
+    "about_description": "Advanced Tab Manager是一个基于Python的桌面应用程序，使用PyQt6和Selenium构建。它提供了一个用户友好的界面，可以在自动化重复访问网站的同时，通过广泛的自定义选项以编程方式打开和关闭Chrome标签页。这个工具非常适合测试、模拟或重复的浏览器自动化任务。",
     "update_check_no_internet": "无互联网连接。更新检查失败。",
     "update_check_failed": "检查更新失败: {error}",
     "update_check_failed_title": "更新检查失败",

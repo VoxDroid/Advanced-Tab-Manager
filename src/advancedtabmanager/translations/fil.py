@@ -286,7 +286,7 @@ translations = {
     "about_support": "Suporta:",
     "about_issues_page": "Issues Page",
     "about_license_text": "Ang software na ito ay lisensyado sa ilalim ng {license}. Tingnan ang {license} para sa mga detalye.",
-    "about_description": "Ang Advanced Tab Manager ay isang Python-based na desktop application na binuo gamit ang PyQt6 at Selenium. Nagbibigay ito ng user-friendly na interface upang automate ang browser tab management, na nagpapahintulot sa mga user na buksan at isara ang Chrome tabs nang programmatically na may malawak na customization options. Ang tool na ito ay perpekto para sa testing, simulation, o repetitive browser automation tasks.",
+    "about_description": "Ang Advanced Tab Manager ay isang Python-based na desktop application na binuo gamit ang PyQt6 at Selenium. Nagbibigay ito ng user-friendly na interface upang automate ang pagbisita sa website nang paulit-ulit sa pamamagitan ng pag-oopen at pagsasara ng mga Chrome tabs nang programmatically na may malawak na customization options. Ang tool na ito ay perpekto para sa testing, simulation, o repetitive browser automation tasks.",
     "update_check_no_internet": "Walang koneksyon sa internet. Nabigo ang pag-check ng update.",
     "update_check_failed": "Nabigo ang pag-check ng mga update: {error}",
     "update_check_failed_title": "Nabigo ang Pag-check ng Update",

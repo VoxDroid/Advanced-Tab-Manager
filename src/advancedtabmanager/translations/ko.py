@@ -288,7 +288,8 @@ translations = {
     "about_support": "지원:",
     "about_issues_page": "Issues 페이지",
     "about_license_text": "이 소프트웨어는 {license} 하에 라이선스됩니다. 자세한 내용은 {license}를 참조하세요.",
-    "about_description": "Advanced Tab Manager는 PyQt6과 Selenium으로 구축된 Python 기반 데스크톱 애플리케이션입니다. 사용자 친화적인 인터페이스를 제공하여 Chrome 탭의 프로그램적 열기 및 닫기를 광범위한 사용자 정의 옵션으로 자동화합니다. 이 도구는 테스트, 시뮬레이션 또는 반복적인 브라우저 자동화 작업에 이상적입니다.",
+    "about_description": "Advanced Tab Manager는 PyQt6과 Selenium으로 구축된 Python 기반 데스크톱 애플리케이션입니다. 사용자 친화적인 인터페이스를 제공하여 웹사이트를 반복적으로 방문하는 작업을 자동화하면서 Chrome 탭의 프로그램적 열기 및 닫기를 광범위한 사용자 정의 옵션으로 수행할 수 있습니다. 이 도구는 테스트, 시뮬레이션 또는 반복적인 브라우저 자동화 작업에 이상적입니다.",
+
     "update_check_no_internet": "인터넷 연결이 없습니다. 업데이트 확인에 실패했습니다.",
     "update_check_failed": "업데이트 확인에 실패했습니다: {error}",
     "update_check_failed_title": "업데이트 확인 실패",

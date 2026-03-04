@@ -9,8 +9,8 @@ author_email = "izeno.contact@gmail.com"
 
 [tool.briefcase.app.advancedtabmanager]
 formal_name = "AdvancedTabManager"
-description = "A powerful GUI tool built with Python, PyQt6, and Selenium to automate Chrome tab management. With multi-instance support, multilingual interface, and customizable themes, it’s ideal for browser automation, testing, and repetitive tasks."
-long_description = """Advanced Tab Manager Pro is a sophisticated desktop application designed to automate browser tab management using Python, PyQt6, and Selenium. This tool enables users to open and close Chrome tabs programmatically with extensive customization options, including multiple browser instances, proxy settings, and real-time system monitoring. Featuring a modern GUI with multilingual support and customizable themes, it’s perfect for developers, testers, and automation enthusiasts looking to streamline repetitive browser tasks.."""
+description = "A powerful GUI tool built with Python, PyQt6, and Selenium to automate repetitive website visits by programmatically opening and managing Chrome tabs. With multi-instance support, multilingual interface, and customizable themes, it’s ideal for browser automation, testing, and repeated navigation tasks."
+long_description = """Advanced Tab Manager Pro is a sophisticated desktop application designed to automate repetitive website visits and browser tab management using Python, PyQt6, and Selenium. This tool enables users to open and close Chrome tabs programmatically with extensive customization options, including multiple browser instances, proxy settings, and real-time system monitoring. Featuring a modern GUI with multilingual support and customizable themes, it’s perfect for developers, testers, and automation enthusiasts looking to streamline repetitive browser tasks.."""
 icon = "assets/icons/ATM"
 sources = [
     "src/advancedtabmanager",

@@ -60,7 +60,7 @@
 
 <hr style="border: 1px dashed #4A6B9A; margin: 20px 0;">
 
-Welcome to **[Advanced Tab Manager Pro](https://github.com/VoxDroid/Advanced-Tab-Manager)**, a sophisticated Python-based desktop application built with [PyQt6](https://pypi.org/project/PyQt6/) and [Selenium](https://pypi.org/project/selenium/), designed to automate browser tab management with extensive customization options. This tool is ideal for developers, testers, and automation enthusiasts needing to efficiently manage multiple Chrome tabs across multiple instances, with features like headless mode, proxy support, multilingual interface, and real-time system monitoring.
+Welcome to **[Advanced Tab Manager Pro](https://github.com/VoxDroid/Advanced-Tab-Manager)**, a sophisticated Python-based desktop application built with [PyQt6](https://pypi.org/project/PyQt6/) and [Selenium](https://pypi.org/project/selenium/), designed to automate repetitive website visits and browser tab management with extensive customization options. This tool is ideal for developers, testers, and automation enthusiasts needing to efficiently manage multiple Chrome tabs across multiple instances, with features like headless mode, proxy support, multilingual interface, and real-time system monitoring.
 
 ## Table of Contents
 

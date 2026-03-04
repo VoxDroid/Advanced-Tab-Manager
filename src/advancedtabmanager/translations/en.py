@@ -288,7 +288,7 @@ translations = {
     "about_support": "Support:",
     "about_issues_page": "Issues Page",
     "about_license_text": "This software is licensed under the {license}. See {license} for details.",
-    "about_description": "Advanced Tab Manager is a Python-based desktop application built with PyQt6 and Selenium. It provides a user-friendly interface to automate browser tab management, allowing users to open and close Chrome tabs programmatically with extensive customization options. This tool is ideal for testing, simulation, or repetitive browser automation tasks.",
+    "about_description": "Advanced Tab Manager is a Python-based desktop application built with PyQt6 and Selenium. It provides a user-friendly interface to automate repetitive website visits by opening and closing Chrome tabs programmatically with extensive customization options. This tool is ideal for testing, simulation, or repetitive browser automation tasks.",
     "update_check_no_internet": "No internet connection. Update check failed.",
     "update_check_failed": "Failed to check for updates: {error}",
     "update_check_failed_title": "Update Check Failed",
