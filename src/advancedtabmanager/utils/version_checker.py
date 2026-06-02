@@ -5,9 +5,10 @@ from PyQt6.QtCore import QThread, pyqtSignal
 CURRENT_VERSION = "1.4.0"
 GITHUB_REPO = "VoxDroid/Advanced-Tab-Manager"
 
+
 class VersionChecker(QThread):
     update_available = pyqtSignal(str, str)  # Emits new_version, release_url
-    error_occurred = pyqtSignal(str)        # Emits error message
+    error_occurred = pyqtSignal(str)  # Emits error message
 
     def __init__(self):
         super().__init__()

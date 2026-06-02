@@ -6,3 +6,6 @@ psutil
 briefcase
 packaging
 requests
+pre-commit
+pytest
+pytest-cov

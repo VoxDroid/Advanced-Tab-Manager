@@ -93,3 +93,16 @@ requires = [
 requires = [
 ]
 
+[tool.ruff]
+line-length = 88
+target-version = "py39"
+per-file-ignores = {"src/advancedtabmanager/translations/*.py" = ["F601"]}
+
+[tool.mypy]
+ignore_missing_imports = true
+disable_error_code = ["import-untyped"]
+
+[tool.isort]
+profile = "black"
+line_length = 88
+

@@ -174,7 +174,7 @@ translations = {
     # QMessageBox and dialog strings
     "update_available_text": "A new version ({new_version}) is available!",
     "update_available_info": "Current version: {current_version}\nVisit {url} to download.",
-    "update_check_failed_title": "Update Check Failed", 
+    "update_check_failed_title": "Update Check Failed",
     "update_check_failed_text": "Unable to check for updates.",
     "reset_settings_title": "Reset Settings",
     "reset_settings_text": "Are you sure you want to reset all settings to their default values?\n\nThis action cannot be undone.",

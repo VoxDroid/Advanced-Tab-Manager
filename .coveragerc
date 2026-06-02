@@ -1,0 +1,11 @@
+[run]
+source =
+    advancedtabmanager
+omit =
+    */app.py
+    */core/*
+    */__main__.py
+
+[report]
+show_missing = True
+fail_under = 100
